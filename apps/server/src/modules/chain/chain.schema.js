@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { messages } from "../../shared/schemas/messages.js";
 import { zodObjectId } from "../../shared/schemas/zodObjectId.js";
 import { paginationWithAllSchema } from "../../shared/schemas/paginationSchema.js";
 
@@ -8,10 +9,7 @@ export const chainQuerySchema = paginationWithAllSchema.extend({
 
 export const createChainSchema = z.object({
   name: z
-    .string({
-      required_error: "Chain name is required.",
-      invalid_type_error: "Chain name is required.",
-    })
+    .string(messages("Chain name is required."))
     .min(1, "Chain name cannot be empty."),
   image: zodObjectId,
 });

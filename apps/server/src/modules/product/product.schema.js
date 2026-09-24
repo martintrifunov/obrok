@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { messages } from "../../shared/schemas/messages.js";
 import { zodObjectId } from "../../shared/schemas/zodObjectId.js";
 import { paginationSchema } from "../../shared/schemas/paginationSchema.js";
 
@@ -13,10 +14,7 @@ export const productQuerySchema = paginationSchema.extend({
 export const createProductSchema = z
   .object({
     title: z
-      .string({
-        required_error: "Product title is required.",
-        invalid_type_error: "Product title is required.",
-      })
+      .string(messages("Product title is required."))
       .min(1, "Product title cannot be empty."),
     description: z.string().min(1, "Description cannot be empty.").optional(),
     category: z.string().min(1, "Category cannot be empty.").optional(),

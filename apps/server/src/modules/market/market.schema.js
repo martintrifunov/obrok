@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { messages } from "../../shared/schemas/messages.js";
 import { zodObjectId } from "../../shared/schemas/zodObjectId.js";
 import { paginationWithAllSchema } from "../../shared/schemas/paginationSchema.js";
 
@@ -9,21 +10,12 @@ export const marketQuerySchema = paginationWithAllSchema.extend({
 
 export const createMarketSchema = z.object({
   name: z
-    .string({
-      required_error: "Market name is required.",
-      invalid_type_error: "Market name is required.",
-    })
+    .string(messages("Market name is required."))
     .min(1, "Market name cannot be empty."),
   location: z
     .array(
-      z.number({
-        required_error: "Coordinate is required.",
-        invalid_type_error: "Coordinate must be a number.",
-      }),
-      {
-        required_error: "Location coordinates are required.",
-        invalid_type_error: "Location coordinates are required.",
-      },
+      z.number(messages("Coordinate is required.", "Coordinate must be a number.")),
+      messages("Location coordinates are required."),
     )
     .length(2, "Location must contain exactly 2 coordinates."),
   chain: zodObjectId,

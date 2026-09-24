@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateField, messages } from "../../shared/schemas/messages.js";
 import { zodObjectId } from "../../shared/schemas/zodObjectId.js";
 import { paginationSchema } from "../../shared/schemas/paginationSchema.js";
 
@@ -10,9 +11,9 @@ export const publicHolidayQuerySchema = paginationSchema.extend({
 
 export const createPublicHolidaySchema = z.object({
   name: z
-    .string({ required_error: "Holiday name is required." })
+    .string(messages("Holiday name is required."))
     .min(1, "Holiday name cannot be empty."),
-  date: z.coerce.date({ required_error: "Holiday date is required." }),
+  date: dateField("Holiday date is required.", "Holiday date is invalid."),
 });
 
 export const updatePublicHolidaySchema = z.object({
