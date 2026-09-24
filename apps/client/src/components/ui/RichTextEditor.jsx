@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -8,7 +8,6 @@ import {
   styled,
   ToggleButton,
   ToggleButtonGroup,
-  useTheme,
 } from "@mui/material";
 import FormatBoldIcon from "@mui/icons-material/FormatBold";
 import FormatItalicIcon from "@mui/icons-material/FormatItalic";
@@ -21,8 +20,6 @@ import LinkIcon from "@mui/icons-material/Link";
 import FormatClearIcon from "@mui/icons-material/FormatClear";
 
 const RichTextEditor = ({ value, onChange, error }) => {
-  const theme = useTheme();
-
   const editor = useEditor({
     extensions: [StarterKit, Underline, Link.configure({ openOnClick: false })],
     content: value,

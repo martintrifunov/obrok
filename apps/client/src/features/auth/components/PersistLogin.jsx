@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import useRefreshToken from "@/features/auth/hooks/useRefreshToken";
 import useAuth from "@/features/auth/hooks/useAuth";
@@ -15,7 +15,8 @@ const PersistLogin = () => {
     const verifyRefreshToken = async () => {
       try {
         await refresh();
-      } catch (err) {
+      } catch {
+        // No valid refresh token; fall through to the login flow.
       } finally {
         isMounted && setIsLoading(false);
       }

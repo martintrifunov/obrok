@@ -26,6 +26,14 @@ jobs:
         working-directory: ./apps/server
         run: npm test
 
+      - name: Install client dependencies
+        working-directory: ./apps/client
+        run: npm ci
+
+      - name: Lint client
+        working-directory: ./apps/client
+        run: npm run lint
+
   deploy:
     name: Deploy to Production
     needs: [test]
@@ -36,12 +44,13 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          APP_DIR: ${{ vars.VPS_APP_DIR || '/home/maco/projects/obrok' }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           passphrase: ${{ secrets.VPS_PASSPHRASE }}
-          envs: RELEASE_TAG
+          envs: RELEASE_TAG,APP_DIR
           script: |
             set -e
 
@@ -49,8 +58,8 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             source "$NVM_DIR/nvm.sh"
 
-            # Navigate to the exact absolute path on the VPS
-            cd /home/maco/projects/obrok
+            # Navigate to the app checkout on the VPS (override with the VPS_APP_DIR repo variable)
+            cd "$APP_DIR"
             
             echo "--- Fetching latest code for $RELEASE_TAG ---"
             git fetch --tags

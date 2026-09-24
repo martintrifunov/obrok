@@ -31,8 +31,8 @@ app.use(
   }),
 );
 app.use(cors(corsOptions));
-app.use(express.urlencoded({ limit: "10mb", extended: false }));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "1mb", extended: false }));
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(visitorTracking);
 app.use("/uploads", express.static(path.resolve("src/uploads")));

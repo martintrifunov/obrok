@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { IconButton, Box, useTheme, Typography } from "@mui/material";
 import AttachmentIcon from "@mui/icons-material/Attachment";
 import DeleteIcon from "@mui/icons-material/Delete";

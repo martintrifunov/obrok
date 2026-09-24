@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import TermsAndPrivacyModal from "@/components/ui/TermsAndPrivacyModal";
 
 const TERMS_ACCEPTED_KEY = "obrok_terms_accepted";

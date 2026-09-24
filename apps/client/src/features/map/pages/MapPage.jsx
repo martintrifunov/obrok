@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Map from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -120,7 +120,9 @@ const MapPage = () => {
         VISIBLE_CHAINS_STORAGE_KEY,
         JSON.stringify(Array.from(visibleChains)),
       );
-    } catch {}
+    } catch {
+      // Storage can be unavailable (private mode, quota); the filter still works in memory.
+    }
   }, [visibleChains]);
 
   const handleUserLocation = useCallback((location) => {
