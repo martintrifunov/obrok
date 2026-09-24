@@ -140,9 +140,14 @@ export class SuperKitGoScraper extends BaseScraper {
     const allProducts = this.#extractProducts(firstPageData.products);
 
     // Fetch remaining pages sequentially to be respectful to the server
+    let complete = true;
     for (let p = 2; p <= totalPages; p++) {
       const pageData = await this.#fetchPage(storeUrl, p);
-      if (!pageData?.success || !pageData.products?.length) break;
+      if (!pageData?.success) {
+        complete = false;
+        break;
+      }
+      if (!pageData.products?.length) break;
       allProducts.push(...this.#extractProducts(pageData.products));
     }
 
@@ -152,10 +157,18 @@ export class SuperKitGoScraper extends BaseScraper {
       latestByTitle.set(product.title, product);
     }
 
+    if (!complete) {
+      console.warn(
+        `[SuperKitGoScraper] Incomplete scrape of ${storeUrl}; not saving the update date so the next run retries.`,
+      );
+    }
+
     return {
       upToDate: false,
       products: Array.from(latestByTitle.values()),
-      newUpdateDate,
+      // Saving the date after a partial scrape would mark the store up to date
+      // and skip the missing pages until the chain publishes a new pricelist.
+      newUpdateDate: complete ? newUpdateDate : undefined,
     };
   }
 

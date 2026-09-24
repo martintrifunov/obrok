@@ -210,6 +210,26 @@ describe("SuperKitGoScraper", () => {
       const result = await scraper.fetchProducts(null, "https://www.superkitgo.mk/table.php?market=market11", null);
       expect(result.products).toHaveLength(2);
       expect(result.products.map((p) => p.title)).toEqual(["P1", "P2"]);
+      expect(result.newUpdateDate).toBeInstanceOf(Date);
+    });
+
+    it("keeps partial products but withholds the update date when a later page fails", async () => {
+      const page1 = makeApiResponse(
+        [makeProduct({ product_name: "P1", dostapnost: "1" })],
+        { page: 1, total: 2, total_pages: 2 },
+      );
+
+      let callCount = 0;
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+        callCount++;
+        const data = callCount === 1 ? page1 : { success: false };
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+      });
+
+      const result = await scraper.fetchProducts(null, "https://www.superkitgo.mk/table.php?market=market11", null);
+      expect(result.products.map((p) => p.title)).toEqual(["P1"]);
+      expect(result.newUpdateDate).toBeUndefined();
     });
   });
 });
