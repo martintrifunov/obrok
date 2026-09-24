@@ -51,10 +51,11 @@ export class SmartSearchService {
     // Search for each product in parallel
     const productSearches = await Promise.all(
       intent.products.map(async (productName) => {
-        const result = await this.searchService.search({
+        const result = await this.searchService.searchProducts({
           q: productName,
           page: 1,
           limit: 20,
+          parseIntent: false,
         });
         return { name: productName, results: result.data };
       }),

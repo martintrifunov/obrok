@@ -52,19 +52,28 @@ export class SearchService {
       return { data: [], pagination: buildPaginationMeta({ total: 0, page, limit }), priceSort: null };
     }
 
-    // Parse intent to extract clean search terms and price sorting preference
-    const intent = this.intentParserService?.isAvailable()
-      ? await this.intentParserService.parseIntent(q)
-      : { searchTerms: q, priceSort: null, intent: "search", products: [] };
-
-    const searchQuery = intent.searchTerms || q;
-
     await this.analyticsService?.trackFeatureUsage({
       visitorId: analytics?.visitorId,
       userId: analytics?.userId,
       feature: "hybrid-search",
       path: analytics?.path,
     });
+
+    return this.searchProducts({ q, marketId, page, limit });
+  }
+
+  /**
+   * Hybrid product search without the feature-flag gate or analytics tracking.
+   * Smart search calls this per ingredient with parseIntent: false, since the
+   * ingredient names already come from a parsed intent.
+   */
+  async searchProducts({ q, marketId, page = 1, limit = 10, parseIntent = true }) {
+    // Parse intent to extract clean search terms and price sorting preference
+    const intent = parseIntent && this.intentParserService?.isAvailable()
+      ? await this.intentParserService.parseIntent(q)
+      : { searchTerms: q, priceSort: null, intent: "search", products: [] };
+
+    const searchQuery = intent.searchTerms || q;
 
     const [vectorResults, keywordResults] = await Promise.all([
       this.#vectorSearch(searchQuery, marketId),
