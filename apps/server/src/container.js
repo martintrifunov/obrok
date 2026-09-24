@@ -96,7 +96,7 @@ const publicHolidayRepository = new PublicHolidayRepository();
 const publicHolidayService = new PublicHolidayService(publicHolidayRepository);
 
 const reportJobRepository = new ReportJobRepository();
-const reportService = new ReportService(reportJobRepository, marketRepository);
+export const reportService = new ReportService(reportJobRepository, marketRepository);
 
 const smartSearchService = new SmartSearchService(
   intentParserService,

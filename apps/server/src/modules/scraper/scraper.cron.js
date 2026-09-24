@@ -19,7 +19,7 @@ export const startScraperCron = (
   productRepository,
   featureFlagService,
 ) => {
-  cron.schedule("0 3 * * 1,4", async () => {
+  const task = cron.schedule("0 3 * * 1,4", async () => {
     console.log("[ScraperCron] Starting scheduled scrape run...");
 
     const scrapers = createAllScrapers();
@@ -49,4 +49,6 @@ export const startScraperCron = (
   console.log(
     "[ScraperCron] Scheduled — runs at 03:00 every Monday and Thursday.",
   );
+
+  return task;
 };

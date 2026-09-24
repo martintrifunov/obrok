@@ -15,6 +15,17 @@ export class ReportService {
     this.activeJobs = new Map();
   }
 
+  /**
+   * Jobs run in-process, so any job still PENDING/PROCESSING at startup was
+   * killed by a restart. Left alone, it blocks that user from new reports (409).
+   */
+  async abortInterruptedJobs() {
+    const result = await this.reportJobRepository.abortInterrupted(
+      "Interrupted by a server restart.",
+    );
+    return result.modifiedCount ?? 0;
+  }
+
   async createJob(userId, filters) {
     const existing = await this.reportJobRepository.findActiveByUser(userId);
     if (existing) {

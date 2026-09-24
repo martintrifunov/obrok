@@ -16,6 +16,13 @@ export class ReportJobRepository {
     }).exec();
   }
 
+  async abortInterrupted(reason) {
+    return ReportJobModel.updateMany(
+      { status: { $in: ["PENDING", "PROCESSING"] } },
+      { $set: { status: "ABORTED", error: reason, finishedAt: new Date() } },
+    ).exec();
+  }
+
   async create(data) {
     return ReportJobModel.create(data);
   }

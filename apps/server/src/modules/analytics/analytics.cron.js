@@ -3,7 +3,7 @@ import cron from "node-cron";
 export const startAnalyticsCron = (analyticsService) => {
   const retentionDays = Number(process.env.ANALYTICS_RAW_RETENTION_DAYS || 90);
 
-  cron.schedule("30 2 * * *", async () => {
+  const task = cron.schedule("30 2 * * *", async () => {
     try {
       const result = await analyticsService.cleanupRawEvents({ retentionDays });
       console.log(
@@ -17,4 +17,6 @@ export const startAnalyticsCron = (analyticsService) => {
   console.log(
     `[AnalyticsCron] Scheduled daily cleanup at 02:30 (raw retention ${retentionDays} days).`,
   );
+
+  return task;
 };
