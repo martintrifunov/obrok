@@ -1,5 +1,10 @@
 import { haversineDistance } from "../../shared/utils/haversine.js";
 import { calculateWeeklyBudget } from "../../shared/utils/obrokBudget.js";
+import {
+  todayInAppTimeZone,
+  utcDateToLocalCalendarDate,
+  utcRangeForCalendarDays,
+} from "../../shared/utils/calendarDate.js";
 
 export class SmartSearchService {
   constructor(intentParserService, searchService, featureFlagService, publicHolidayService, analyticsService = null) {
@@ -198,18 +203,19 @@ export class SmartSearchService {
   }
 
   async #computeBudget() {
-    const now = new Date();
-    const monday = this.#getMondayOfWeek(now);
+    const today = todayInAppTimeZone();
+    const monday = this.#getMondayOfWeek(today);
     const saturday = new Date(monday);
     saturday.setDate(saturday.getDate() + 5);
 
     let holidayDates = [];
     if (this.publicHolidayService) {
-      const holidays = await this.publicHolidayService.getHolidaysByDateRange(monday, saturday);
-      holidayDates = holidays.map((h) => h.date);
+      const { from, to } = utcRangeForCalendarDays(monday, saturday);
+      const holidays = await this.publicHolidayService.getHolidaysByDateRange(from, to);
+      holidayDates = holidays.map((h) => utcDateToLocalCalendarDate(new Date(h.date)));
     }
 
-    const budgetInfo = calculateWeeklyBudget(now, holidayDates);
+    const budgetInfo = calculateWeeklyBudget(today, holidayDates);
     return {
       weeklyBudget: budgetInfo.budget,
       budgetInfo,
