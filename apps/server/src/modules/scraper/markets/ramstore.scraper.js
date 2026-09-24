@@ -1,5 +1,6 @@
 import { BaseScraper } from "./base.scraper.js";
 import { extractProductsFromTable } from "../utils/table-evaluate.js";
+import { withParsedPrices } from "../utils/parsePrice.js";
 
 const INDEX_URL = "https://ramstore.com.mk/marketi/";
 const NAV_TIMEOUT_MS = Number.parseInt(
@@ -196,11 +197,8 @@ export class RamstoreScraper extends BaseScraper {
           continue;
         }
 
-        const rawPrice = asText(cells[colPrice])
-          .replace(",", ".")
-          .replace(/[^\d.]/g, "");
-        const price = Number.parseFloat(rawPrice);
-        if (Number.isNaN(price) || price <= 0) continue;
+        const priceText = asText(cells[colPrice]);
+        if (!priceText) continue;
 
         const title = asText(cells[colTitle]);
         if (!title) continue;
@@ -208,7 +206,7 @@ export class RamstoreScraper extends BaseScraper {
         const category =
           colCategory !== -1 ? asText(cells[colCategory]) || "Општо" : "Општо";
 
-        products.push({ title, price, category });
+        products.push({ title, priceText, category });
       }
 
       return { supported: true, products };
@@ -217,7 +215,7 @@ export class RamstoreScraper extends BaseScraper {
     if (fastPath.supported) {
       // Keep the latest seen price per title to avoid unnecessary duplicate writes.
       const latestByTitle = new Map();
-      for (const p of fastPath.products) {
+      for (const p of withParsedPrices(fastPath.products)) {
         latestByTitle.set(p.title, p);
       }
       allProducts.push(...latestByTitle.values());
@@ -245,9 +243,10 @@ export class RamstoreScraper extends BaseScraper {
     let pageCount = 1;
 
     while (hasNextPage) {
-      const products = await page.evaluate(
-        extractProductsFromTable,
-        { tableSelector: "table.dataTable, table" },
+      const products = withParsedPrices(
+        await page.evaluate(extractProductsFromTable, {
+          tableSelector: "table.dataTable, table",
+        }),
       );
 
       const paginationState = await page.evaluate(() => {

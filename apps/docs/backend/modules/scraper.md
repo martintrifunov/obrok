@@ -37,7 +37,7 @@ Automated web scraping pipeline using Puppeteer with concurrent tabs, market dis
 
 ### Cron Schedule
 
-- **When**: Monday and Thursday at 03:00
+- **When**: Monday and Thursday at 03:00 Europe/Skopje time (not the container's UTC)
 - **Concurrency**: 2 tabs in production, 4 in development
 
 ### Pipeline
@@ -81,10 +81,14 @@ registry.register(ramstoreScraper);
 Three-tier strategy, in order:
 
 1. **Static override** — `data/market-coordinates.json`, keyed by normalized market name. Checked first; this is how manually-corrected or chain-provided coordinates take precedence over the two automated tiers below.
-2. **Nominatim lookup** — queries built from address, store name, and transliterated variants.
+2. **Nominatim lookup** — queries built from address, store name, and transliterated variants. Every request is spaced at least 1.1s after the previous one (Nominatim allows 1 request/second). HTTP errors are logged rather than treated as "no match"; a 429 backs off 5s and retries once.
 3. **City-center fallback** — if every Nominatim query fails, places the market near a hardcoded city-center coordinate with a small deterministic offset (so multiple failed lookups in the same city don't stack on one point).
 
 See [Geolocation](/concepts/geolocation) for why the static tier exists and its known failure mode.
+
+### Price Parsing
+
+All scrapers parse prices with `utils/parsePrice.js`, which accepts both `1.299,00` and `1,299.00` styles, spaces (including NBSP) as thousands separators, and currency text. When both `.` and `,` appear, the last one is the decimal separator. A single separator followed by exactly three digits (`2.450`) is read as thousands, since MKD grocery prices don't have three decimals. Code that runs inside `page.evaluate` (the shared table extractor, Ramstore's DataTables fast path, Kipper's AJAX loop) returns the raw `priceText`, and Node parses it with `withParsedPrices`, because browser-context functions can't import modules.
 
 ### Performance Optimizations
 
@@ -119,6 +123,7 @@ The wipe script (`wipe-db-scrape-data.js`) supports two modes:
 | Failure | Behavior |
 |---------|----------|
 | Scraper page timeout | Skip market, log error, continue |
+| Browser tab crashes (open, setup, or close fails) | Skip that store, log error, other stores in the batch continue |
 | Partial or suspiciously small scrape | Save the prices seen, keep the unseen ones, log a warning |
 | Geocoding failure | Use city center fallback |
 | Embedding generation failure | Products saved without embeddings |

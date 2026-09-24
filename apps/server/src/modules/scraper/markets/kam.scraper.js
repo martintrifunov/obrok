@@ -1,4 +1,5 @@
 import { BaseScraper } from "./base.scraper.js";
+import { parsePrice } from "../utils/parsePrice.js";
 import { extractPdfTextItems } from "../utils/pdf-text-extractor.js";
 
 const INDEX_URL = "https://kam.com.mk/ceni-vo-marketi.nspx";
@@ -209,9 +210,8 @@ export class KamScraper extends BaseScraper {
     const availText = collect("availability").toUpperCase();
     if (availText === "НЕ") return null;
 
-    const rawPrice = collect("price").replace(",", ".").replace(/[^\d.]/g, "");
-    const price = parseFloat(rawPrice);
-    if (isNaN(price) || price <= 0) return null;
+    const price = parsePrice(collect("price"));
+    if (!(price > 0)) return null;
 
     const category = collect("category") || "Општо";
     return { title, price, category };

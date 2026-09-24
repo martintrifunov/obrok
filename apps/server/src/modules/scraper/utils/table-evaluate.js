@@ -15,7 +15,9 @@
  * @param {string[]} [opts.priceKeywords]
  * @param {string[]} [opts.categoryKeywords]
  * @param {string[]} [opts.availabilityKeywords]
- * @returns {Array<{title: string, price: number, category: string}>}
+ * @returns {Array<{title: string, priceText: string, category: string}>}
+ *   Raw price text; parse it in Node with `withParsedPrices` (this runs in the
+ *   browser and can't import the shared parser).
  */
 export const extractProductsFromTable = (opts = {}) => {
   const {
@@ -72,11 +74,8 @@ export const extractProductsFromTable = (opts = {}) => {
       cells[colAvailable]?.textContent.trim().toUpperCase() === "НЕ"
     ) return acc;
 
-    const rawPrice = cells[colPrice]?.textContent
-      .replace(",", ".")
-      .replace(/[^\d.]/g, "");
-    const price = parseFloat(rawPrice);
-    if (isNaN(price) || price <= 0) return acc;
+    const priceText = cells[colPrice]?.textContent.trim();
+    if (!priceText) return acc;
 
     const title = cells[colTitle]?.textContent.trim();
     if (!title) return acc;
@@ -85,7 +84,7 @@ export const extractProductsFromTable = (opts = {}) => {
       ? cells[colCategory]?.textContent.trim() || defaultCategory
       : defaultCategory;
 
-    acc.push({ title, price, category });
+    acc.push({ title, priceText, category });
     return acc;
   }, []);
 };

@@ -88,9 +88,9 @@ describe("KipperScraper", () => {
         .mockResolvedValueOnce(true)
         .mockResolvedValueOnce("03.04.2026 06:08")
         .mockResolvedValueOnce([
-          { title: "STANDARD", price: 120, category: "Општо" },
-          { title: "PREMIUM", price: 1599, category: "Специјално" },
-          { title: "PREMIUM", price: 1699, category: "Специјално" },
+          { title: "STANDARD", priceText: "120,00 ден", category: "Општо" },
+          { title: "PREMIUM", priceText: "1.599,00 ден", category: "Специјално" },
+          { title: "PREMIUM", priceText: "1.699,00 ден", category: "Специјално" },
         ]),
       setUserAgent: vi.fn(),
       setExtraHTTPHeaders: vi.fn(),

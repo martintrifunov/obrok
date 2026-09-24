@@ -1,4 +1,5 @@
 import { BaseScraper } from "./base.scraper.js";
+import { withParsedPrices } from "../utils/parsePrice.js";
 
 const INDEX_URL = "https://kipper.mk/mk/marketet/";
 const NAV_TIMEOUT_MS = Number.parseInt(
@@ -342,16 +343,14 @@ export class KipperScraper extends BaseScraper {
           const availability = toText(row.product_status).toUpperCase();
           if (availability === "НЕ") continue;
 
-          const priceText = toText(row.product_price)
-            .replace(",", ".")
-            .replace(/[^\d.]/g, "");
-          const price = Number.parseFloat(priceText);
-          if (Number.isNaN(price) || price <= 0) continue;
+          // Parsed in Node below: this runs in the browser and can't import the parser.
+          const priceText = toText(row.product_price);
+          if (!priceText) continue;
 
           const category =
             toText(row.product_subgroup) || toText(row.product_type_alt) || "Општо";
 
-          products.push({ title, price, category });
+          products.push({ title, priceText, category });
         }
 
         start += rows.length;
@@ -362,7 +361,7 @@ export class KipperScraper extends BaseScraper {
     }, AJAX_PAGE_SIZE);
 
     const latestByTitle = new Map();
-    for (const product of allProducts) {
+    for (const product of withParsedPrices(allProducts)) {
       latestByTitle.set(product.title, product);
     }
 

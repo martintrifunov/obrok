@@ -1,4 +1,5 @@
 import { BaseScraper } from "./base.scraper.js";
+import { parsePrice } from "../utils/parsePrice.js";
 
 const CENOVNIK_URL = "https://www.superkitgo.mk/cenovnik.html";
 const MARKETI_URL = "https://www.superkitgo.mk/marketi.html";
@@ -211,9 +212,8 @@ export class SuperKitGoScraper extends BaseScraper {
       // Only include available products (dostapnost "1" = ДА)
       if (String(p.dostapnost) !== "1") return acc;
 
-      const rawPrice = String(p.prodazna_cena).replace(",", ".").replace(/[^\d.]/g, "");
-      const price = parseFloat(rawPrice);
-  if (isNaN(price) || price <= 0) return acc;
+      const price = parsePrice(p.prodazna_cena);
+      if (!(price > 0)) return acc;
 
       const title = (p.product_name || "").trim();
       if (!title) return acc;

@@ -1,5 +1,6 @@
 import { BaseScraper } from "./base.scraper.js";
 import { extractProductsFromTable } from "../utils/table-evaluate.js";
+import { withParsedPrices } from "../utils/parsePrice.js";
 
 const INDEX_URL = "https://stokomak.proverkanaceni.mk/";
 
@@ -85,7 +86,9 @@ export class StokomakScraper extends BaseScraper {
         isFirstPage = false;
       }
 
-      const pageProducts = await page.evaluate(extractProductsFromTable);
+      const pageProducts = withParsedPrices(
+        await page.evaluate(extractProductsFromTable),
+      );
 
       allProducts.push(...pageProducts);
 

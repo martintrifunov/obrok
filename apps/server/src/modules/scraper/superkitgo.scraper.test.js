@@ -108,6 +108,19 @@ describe("SuperKitGoScraper", () => {
       expect(result.products.map((product) => product.title)).toEqual(["CHEAP", "EXPENSIVE"]);
     });
 
+    it("parses prices with thousands separators", async () => {
+      const apiResponse = makeApiResponse([
+        makeProduct({ product_name: "OIL 5L", prodazna_cena: "1.299,00" }),
+      ]);
+      vi.spyOn(globalThis, "fetch").mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(apiResponse),
+      });
+
+      const result = await scraper.fetchProducts(null, "https://www.superkitgo.mk/table.php?market=market11", null);
+      expect(result.products[0].price).toBe(1299);
+    });
+
     it("filters out products with zero price", async () => {
       const apiData = makeApiResponse([
         makeProduct({ product_name: "VALID", dostapnost: "1", prodazna_cena: "50.00" }),
