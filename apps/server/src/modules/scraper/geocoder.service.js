@@ -148,7 +148,8 @@ export class GeocoderService {
     const city = this.#getCity(address) || "";
 
     const cleanAddress = address
-      ?.replace(/(Бул\.|Ул\.|ул\.|бул\.|бр\.|бр)/gi, "")
+      // Strip street/number prefixes only as whole words ("бр" must not eat "Брегалница").
+      ?.replace(/(?<!\p{L})(?:бул|ул|бр)(?:\.|(?!\p{L}))/giu, "")
       .split("–")[0]
       .trim();
 

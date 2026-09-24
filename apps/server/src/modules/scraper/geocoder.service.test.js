@@ -80,5 +80,25 @@ describe("GeocoderService", () => {
 
       globalThis.fetch = originalFetch;
     });
+
+    it("strips street prefixes without mangling street names", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([{ lat: "42.0", lon: "21.4" }]),
+      });
+
+      await service.geocode(
+        "НОВА ЛОКАЦИЈА 2",
+        "Македонија",
+        "ул. Брегалница бр. 5, Скопје",
+      );
+
+      const firstQuery = new URL(globalThis.fetch.mock.calls[0][0]).searchParams.get("q");
+      expect(firstQuery).toContain("Брегалница");
+      expect(firstQuery).not.toMatch(/ул\.|бр\./i);
+
+      globalThis.fetch = originalFetch;
+    });
   });
 });
