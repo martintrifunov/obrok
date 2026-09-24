@@ -9,8 +9,8 @@
 import { inflateSync } from "zlib";
 
 const tryInflate = (buf) => {
-  try { return inflateSync(buf); } catch (_) { /* empty */ }
-  try { return inflateSync(buf.slice(2)); } catch (_) { /* empty */ }
+  try { return inflateSync(buf); } catch { /* try next */ }
+  try { return inflateSync(buf.slice(2)); } catch { /* try next */ }
   return null;
 };
 
@@ -197,7 +197,7 @@ const parseContentItems = (content, fontCMapIndex) => {
 
   const readKeyword = () => {
     let kw = "";
-    while (i < len && !/[\s\t\r\n\f()\[\]{}<>\/]/.test(content[i]))
+    while (i < len && !/[\s\t\r\n\f()[\]{}<>/]/.test(content[i]))
       kw += content[i++];
     return kw;
   };
@@ -215,7 +215,7 @@ const parseContentItems = (content, fontCMapIndex) => {
     if (ch === "/") {
       i++;
       let name = "";
-      while (i < len && !/[\s\t\r\n\f()\[\]{}<>\/]/.test(content[i]))
+      while (i < len && !/[\s\t\r\n\f()[\]{}<>/]/.test(content[i]))
         name += content[i++];
       stack.push({ type: "name", value: name });
       continue;

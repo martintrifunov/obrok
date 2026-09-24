@@ -1,8 +1,5 @@
 import mongoose from "mongoose";
-import {
-  buildBilingualRegex,
-  buildBilingualTokenRegexes,
-} from "../../shared/utils/bilingualRegex.js";
+import { buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
 import { buildPaginationMeta } from "../../shared/utils/buildPaginationMeta.js";
 import { ProductModel } from "../product/product.model.js";
 import { MarketProductModel } from "../product/market-product.model.js";

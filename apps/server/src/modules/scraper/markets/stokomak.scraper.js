@@ -16,6 +16,10 @@ export class StokomakScraper extends BaseScraper {
     return "Македонија";
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
+   */
   async fetchMarkets(page) {
     await page.goto(INDEX_URL, { waitUntil: "domcontentloaded" });
 
@@ -51,6 +55,12 @@ export class StokomakScraper extends BaseScraper {
     return BaseScraper.deduplicateByName(entries);
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @param {string} storeUrl
+   * @param {Date | null} [previousUpdateString]
+   * @returns {Promise<import('./base.scraper.js').FetchProductsResult>}
+   */
   async fetchProducts(page, storeUrl, previousUpdateString) {
     const allProducts = [];
     let currentUrl = storeUrl;

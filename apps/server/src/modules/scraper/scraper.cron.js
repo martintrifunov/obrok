@@ -41,7 +41,6 @@ export const startScraperCron = (
     await syncProductEmbeddings({
       embeddingService,
       productEmbeddingRepository,
-      productRepository,
       featureFlagService,
       logPrefix: "[ScraperCron]",
     });

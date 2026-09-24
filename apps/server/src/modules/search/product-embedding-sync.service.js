@@ -7,7 +7,6 @@ const CURSOR_BATCH_SIZE = 500;
 export async function syncProductEmbeddings({
   embeddingService,
   productEmbeddingRepository,
-  productRepository,
   featureFlagService,
   logger = console,
   logPrefix = "[EmbeddingSync]",

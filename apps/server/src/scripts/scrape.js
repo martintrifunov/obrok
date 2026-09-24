@@ -75,7 +75,6 @@ async function main() {
   await syncProductEmbeddings({
     embeddingService,
     productEmbeddingRepository,
-    productRepository,
     featureFlagService,
     logPrefix: "[scrape]",
   });

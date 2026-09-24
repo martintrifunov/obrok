@@ -20,6 +20,10 @@ export class KamScraper extends BaseScraper {
     return "Македонија";
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
+   */
   async fetchMarkets(page) {
     // Navigate to trigger session cookies, then call the JSON API
     await page.goto(INDEX_URL, { waitUntil: "networkidle2" });
@@ -79,6 +83,12 @@ export class KamScraper extends BaseScraper {
     }
   }
 
+  /**
+   * @param {import('puppeteer').Page} _page
+   * @param {string} pdfUrl
+   * @param {Date | null} [prevUpdateDate]
+   * @returns {Promise<import('./base.scraper.js').FetchProductsResult>}
+   */
   async fetchProducts(_page, pdfUrl, prevUpdateDate) {
     const pdfBuf = await this.#fetchPdf(pdfUrl);
     const items = extractPdfTextItems(pdfBuf);

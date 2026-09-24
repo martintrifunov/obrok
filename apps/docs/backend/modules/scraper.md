@@ -31,9 +31,9 @@ Automated web scraping pipeline using Puppeteer with concurrent tabs, market dis
 | Command | Description |
 |---------|-------------|
 | `npm run scrape` | Run all scrapers |
-| `npm run scrape:<chain>` | Run a single chain scraper |
+| `npm run scrape -- <chain>` | Run a single chain scraper |
 | `npm run scrape:db:wipe` | Wipe all scrape-related data |
-| `npm run scrape:db:wipe:<chain>` | Wipe a single chain's data (markets, products, embeddings) |
+| `npm run scrape:db:wipe -- <chain>` | Wipe a single chain's data (markets, products, embeddings) |
 
 ### Cron Schedule
 
@@ -95,7 +95,7 @@ See [Geolocation](/concepts/geolocation) for why the static tier exists and its 
 The wipe script (`wipe-db-scrape-data.js`) supports two modes:
 
 - **Full wipe** (`npm run scrape:db:wipe`): deletes all chains, markets, market_products, products, and product_embeddings.
-- **Per-chain wipe** (`npm run scrape:db:wipe:<chain>`): deletes only the target chain's markets and market_products, removes orphaned products and embeddings not referenced by other chains, then deletes the chain record.
+- **Per-chain wipe** (`npm run scrape:db:wipe -- <chain>`): deletes only the target chain's markets and market_products, removes orphaned products and embeddings not referenced by other chains, then deletes the chain record.
 
 ## Source Anchors
 

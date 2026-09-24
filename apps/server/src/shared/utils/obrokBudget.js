@@ -7,11 +7,6 @@ const dayOfWeekIndex = (date) => {
   return d === 0 ? 7 : d;
 };
 
-const isSameDay = (a, b) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
-
 const isMonSat = (date) => {
   const dow = dayOfWeekIndex(date);
   return dow >= 1 && dow <= 6;

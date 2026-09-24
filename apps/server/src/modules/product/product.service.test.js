@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ProductService } from "./product.service.js";
 import { NotFoundError } from "../../shared/errors/NotFoundError.js";
-import mongoose from "mongoose";
 
 vi.mock("mongoose", async () => {
   const actual = await vi.importActual("mongoose");

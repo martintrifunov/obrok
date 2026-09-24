@@ -6,10 +6,35 @@
  *   - get placeholderImageFilename()
  *   - get geocodeSuffix()        (optional override)
  *   - async fetchMarkets(page)
- *   - async fetchProducts(page, storeUrl)
+ *   - async fetchProducts(page, storeUrl, previousUpdate)
  *
  * ScraperService drives the orchestration — the scraper only
  * knows how to navigate and parse its own market's HTML.
+ */
+
+/**
+ * A store location found on a chain's index page.
+ * @typedef {object} ScrapedMarket
+ * @property {string} name
+ * @property {string} address
+ * @property {string} pricelistUrl
+ */
+
+/**
+ * A single product row parsed from a store's pricelist.
+ * @typedef {object} ScrapedProduct
+ * @property {string} title
+ * @property {number} price
+ * @property {string} category
+ */
+
+/**
+ * Result of scraping one store. When `upToDate` is true the pricelist has not
+ * changed since `previousUpdate` and `products` is omitted.
+ * @typedef {object} FetchProductsResult
+ * @property {boolean} upToDate
+ * @property {ScrapedProduct[]} [products]
+ * @property {Date | null} [newUpdateDate]
  */
 export class BaseScraper {
   /**
@@ -47,10 +72,10 @@ export class BaseScraper {
   /**
    * Scrape the market's index page and return all store locations.
    *
-   * @param {import('puppeteer').Page} page - A Puppeteer page instance.
-   * @returns {Promise<Array<{ name: string, pricelistUrl: string }>>}
+   * @param {import('puppeteer').Page} _page - A Puppeteer page instance.
+   * @returns {Promise<ScrapedMarket[]>}
    */
-  async fetchMarkets(page) {
+  async fetchMarkets(_page) {
     throw new Error(`${this.constructor.name} must implement fetchMarkets()`);
   }
 
@@ -59,20 +84,26 @@ export class BaseScraper {
     * Must filter out unavailable products (Достапност = "Не")
     * and invalid or zero prices.
    *
-   * @param {import('puppeteer').Page} page - A Puppeteer page instance.
-   * @param {string} storeUrl - The URL of the store's pricelist.
-   * @returns {Promise<Array<{ title: string, price: number, category: string }>>}
+   * @param {import('puppeteer').Page} _page - A Puppeteer page instance.
+   * @param {string} _storeUrl - The URL of the store's pricelist.
+   * @param {Date | null} [_previousUpdate] - The pricelist date from the last successful scrape.
+   * @returns {Promise<FetchProductsResult>}
    */
-  async fetchProducts(page, storeUrl) {
+  async fetchProducts(_page, _storeUrl, _previousUpdate) {
     throw new Error(`${this.constructor.name} must implement fetchProducts()`);
   }
 
+  /**
+   * Parse a pricelist "last updated" string such as "12.03.2026 9:30 PM".
+   * @param {string | null | undefined} raw
+   * @returns {Date | null}
+   */
   parseUpdateDate(raw) {
     if (!raw) return null;
     const m = raw.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
     if (!m) return null;
-    let [, day, month, year, hours, minutes, ampm] = m;
-    hours = Number(hours);
+    const [, day, month, year, rawHours, minutes, ampm] = m;
+    let hours = Number(rawHours);
     if (ampm?.toUpperCase() === 'PM' && hours < 12) hours += 12;
     if (ampm?.toUpperCase() === 'AM' && hours === 12) hours = 0;
     return new Date(Number(year), Number(month) - 1, Number(day), hours, Number(minutes));
@@ -80,8 +111,9 @@ export class BaseScraper {
 
   /**
    * Deduplicate an array of market entries by name, keeping the first occurrence.
-   * @param {Array<{name: string}>} entries
-   * @returns {Array<{name: string}>}
+   * @template {{ name: string }} T
+   * @param {T[]} entries
+   * @returns {T[]}
    */
   static deduplicateByName(entries) {
     const seen = new Map();

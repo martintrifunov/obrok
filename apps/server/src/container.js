@@ -113,9 +113,6 @@ export const scraperService = new ScraperService(
   marketProductRepository,
   imageRepository,
   geocoderService,
-  embeddingService,
-  productEmbeddingRepository,
-  featureFlagService,
 );
 
 export const authController = new AuthController(authService, tokenService);

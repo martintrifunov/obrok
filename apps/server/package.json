@@ -13,28 +13,12 @@
     "test:watch": "vitest",
     "scrape": "node src/scripts/scrape.js",
     "scrape:db:wipe": "node src/scripts/wipe-db-scrape-data.js",
-    "scrape:db:wipe:vero": "node src/scripts/wipe-db-scrape-data.js vero",
-    "scrape:db:wipe:ramstore": "node src/scripts/wipe-db-scrape-data.js ramstore",
-    "scrape:db:wipe:stokomak": "node src/scripts/wipe-db-scrape-data.js stokomak",
-    "scrape:db:wipe:kam": "node src/scripts/wipe-db-scrape-data.js kam",
-    "scrape:db:wipe:superkitgo": "node src/scripts/wipe-db-scrape-data.js superkitgo",
-    "scrape:db:wipe:kipper": "node src/scripts/wipe-db-scrape-data.js kipper",
-    "scrape:vero": "node src/scripts/scrape.js vero",
-    "scrape:ramstore": "node src/scripts/scrape.js ramstore",
-    "scrape:stokomak": "node src/scripts/scrape.js stokomak",
-    "scrape:kam": "node src/scripts/scrape.js kam",
-    "scrape:superkitgo": "node src/scripts/scrape.js superkitgo",
-    "scrape:kipper": "node src/scripts/scrape.js kipper",
     "coords:populate": "node src/scripts/populate-coordinates.js",
-    "coords:populate:vero": "node src/scripts/populate-coordinates.js vero",
-    "coords:populate:ramstore": "node src/scripts/populate-coordinates.js ramstore",
-    "coords:populate:stokomak": "node src/scripts/populate-coordinates.js stokomak",
-    "coords:populate:kam": "node src/scripts/populate-coordinates.js kam",
-    "coords:populate:superkitgo": "node src/scripts/populate-coordinates.js superkitgo",
-    "coords:populate:kipper": "node src/scripts/populate-coordinates.js kipper",
     "coords:seed": "node src/scripts/seed-coordinates.js",
     "embeddings:generate": "node src/scripts/generate-embeddings.js",
-    "embeddings:generate:force": "node src/scripts/generate-embeddings.js --force"
+    "embeddings:generate:force": "node src/scripts/generate-embeddings.js --force",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p jsconfig.json"
   },
   "dependencies": {
     "@google/genai": "^1.47.0",
@@ -54,7 +38,11 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0",
     "nodemon": "^3.1.11",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.18"
   }
 }

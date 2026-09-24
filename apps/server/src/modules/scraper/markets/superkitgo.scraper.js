@@ -41,6 +41,9 @@ export class SuperKitGoScraper extends BaseScraper {
    * Discover markets from cenovnik.html (market numbers + type filter)
    * joined with marketi.html (full addresses).
    * Only returns markets tagged type === "super" (СУПЕР КИТ-ГО).
+   *
+   * @param {import('puppeteer').Page} page
+   * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
    */
   async fetchMarkets(page) {
     // --- Step 1: Get market list with numbers and types from cenovnik ---
@@ -110,6 +113,11 @@ export class SuperKitGoScraper extends BaseScraper {
    * Scrape products from a market's pricelist via the JSON API.
    * The table.php page exposes an ajax=1 endpoint that returns JSON,
    * completely bypassing any client-side anti-devtools JS.
+   *
+   * @param {import('puppeteer').Page} _page
+   * @param {string} storeUrl
+   * @param {Date | null} [previousUpdateString]
+   * @returns {Promise<import('./base.scraper.js').FetchProductsResult>}
    */
   async fetchProducts(_page, storeUrl, previousUpdateString) {
     // Fetch first page to get update date and pagination info

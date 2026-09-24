@@ -31,9 +31,6 @@ export class ScraperService {
     marketProductRepository,
     imageRepository,
     geocoderService,
-    embeddingService,
-    productEmbeddingRepository,
-    featureFlagService,
   ) {
     this.chainRepository = chainRepository;
     this.marketRepository = marketRepository;
