@@ -26,6 +26,12 @@ import MealSearchTab from "@/features/map/components/ai-search/MealSearchTab";
 export const PRODUCT_SEARCH_DEBOUNCE_MS = 500;
 export const MEAL_SEARCH_DEBOUNCE_MS = 700;
 
+// Rounded so small GPS jitter doesn't create a new query (and a new AI call).
+const roundLocation = ([lon, lat]) => ({
+  lat: Number(lat.toFixed(4)),
+  lon: Number(lon.toFixed(4)),
+});
+
 const GlobalAISearchDialog = ({
   open,
   onClose,
@@ -70,13 +76,9 @@ const GlobalAISearchDialog = ({
         const normalizedQuery = smartInput.trim();
         setSmartDebouncedQuery(normalizedQuery);
 
-        // Rounded so small GPS jitter doesn't create a new query (and a new AI call).
         const loc = userLocationRef.current;
         if (normalizedQuery && loc?.length === 2) {
-          setSmartSearchLocation({
-            lat: Number(loc[1].toFixed(4)),
-            lon: Number(loc[0].toFixed(4)),
-          });
+          setSmartSearchLocation(roundLocation(loc));
         } else {
           setSmartSearchLocation(null);
         }
@@ -84,6 +86,19 @@ const GlobalAISearchDialog = ({
     }, MEAL_SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [isSmartTabActive, smartInput]);
+
+  // A meal search sent before the first GPS fix has no distances. When the fix
+  // arrives, attach it once (no-location -> location only, so later GPS movement
+  // doesn't re-run the AI query).
+  if (
+    open &&
+    isSmartTabActive &&
+    smartDebouncedQuery &&
+    !smartSearchLocation &&
+    userLocation?.length === 2
+  ) {
+    setSmartSearchLocation(roundLocation(userLocation));
+  }
 
   const handleExplicitClose = useCallback(() => {
     setSearchInput("");

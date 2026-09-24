@@ -91,6 +91,36 @@ describe("GlobalAISearchDialog with smart search enabled", () => {
     expect(params.lon).toBeUndefined();
   });
 
+  it("attaches the first GPS fix to a meal search sent without a location", () => {
+    const { rerender } = renderDialog({ userLocation: null });
+
+    typeAndWait("Внеси оброк што ти се јаде...", "салата", MEAL_SEARCH_DEBOUNCE_MS);
+    expect(lastCallArgs(queries.useSmartSearch)[0].lat).toBeUndefined();
+
+    rerender(
+      <GlobalAISearchDialog open onClose={vi.fn()} userLocation={[21.409471, 42.004302]} />,
+    );
+    expect(lastCallArgs(queries.useSmartSearch)[0]).toMatchObject({
+      q: "салата",
+      lat: 42.0043,
+      lon: 21.4095,
+    });
+  });
+
+  it("does not re-query when the user moves after the location was sent", () => {
+    const { rerender } = renderDialog();
+
+    typeAndWait("Внеси оброк што ти се јаде...", "салата", MEAL_SEARCH_DEBOUNCE_MS);
+    rerender(
+      <GlobalAISearchDialog open onClose={vi.fn()} userLocation={[21.5, 42.1]} />,
+    );
+
+    expect(lastCallArgs(queries.useSmartSearch)[0]).toMatchObject({
+      lat: 42.0043,
+      lon: 21.4095,
+    });
+  });
+
   it("does not run the product search while the meal tab is active", () => {
     renderDialog();
 
