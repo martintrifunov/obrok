@@ -38,6 +38,75 @@ const parseLiteralBytes = (raw) => {
   return out;
 };
 
+// A bfrange covering more codes than this is malformed (or hostile); skip it.
+const MAX_BFRANGE_SPAN = 0x10000;
+
+/**
+ * Decode a CMap destination hex string: UTF-16BE code units, so one entry can be
+ * a surrogate pair (<D835DC00>) or several characters (the "fi" ligature <00660069>).
+ * @param {string} hex
+ * @returns {number[]} UTF-16 code units
+ */
+const hexToCodeUnits = (hex) => {
+  const padded = hex.padStart(Math.ceil(hex.length / 4) * 4, "0");
+  const units = [];
+  for (let i = 0; i < padded.length; i += 4) {
+    units.push(parseInt(padded.slice(i, i + 4), 16));
+  }
+  return units;
+};
+
+const unitsToString = (units) => String.fromCharCode(...units);
+
+/**
+ * Parse the bfchar and bfrange entries of one ToUnicode CMap. Malformed entries
+ * are skipped rather than failing the whole font.
+ * @param {string} text decompressed CMap stream
+ * @param {number} keyLen source code length in bytes (from the codespace range)
+ * @returns {Map<string, string>} source code hex (lowercase) -> Unicode string
+ */
+export const parseToUnicodeCMap = (text, keyLen) => {
+  const charMap = new Map();
+  const key = (code) => code.toString(16).padStart(keyLen * 2, "0");
+
+  for (const block of text.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
+    for (const m of block[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]*)>/g)) {
+      if (!m[2]) continue;
+      charMap.set(key(parseInt(m[1], 16)), unitsToString(hexToCodeUnits(m[2])));
+    }
+  }
+
+  for (const block of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
+    for (const m of block[1].matchAll(
+      /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(?:<([0-9a-fA-F]+)>|\[([^\]]*)\])/g,
+    )) {
+      const start = parseInt(m[1], 16);
+      const end = parseInt(m[2], 16);
+      if (end < start || end - start >= MAX_BFRANGE_SPAN) continue;
+
+      if (m[3] !== undefined) {
+        // Hex destination: each successive source code increments the last code unit.
+        const units = hexToCodeUnits(m[3]);
+        const last = units.length - 1;
+        for (let code = start; code <= end; code++) {
+          const next = [...units];
+          next[last] = (units[last] + (code - start)) & 0xffff;
+          charMap.set(key(code), unitsToString(next));
+        }
+      } else {
+        // Array destination: one string per source code, in order.
+        const dsts = [...m[4].matchAll(/<([0-9a-fA-F]*)>/g)].map((d) => d[1]);
+        for (let i = 0; i < dsts.length && start + i <= end; i++) {
+          if (!dsts[i]) continue;
+          charMap.set(key(start + i), unitsToString(hexToCodeUnits(dsts[i])));
+        }
+      }
+    }
+  }
+
+  return charMap;
+};
+
 /**
  * Parse all ToUnicode CMap streams.
  * @returns {Map<string, { keyLen: number, map: Map<string, string> }>}
@@ -55,24 +124,7 @@ const parseCMaps = (decompressedStreams) => {
     const codeSpaceMatch = text.match(/begincodespacerange\s*<([0-9a-fA-F]+)>/);
     const keyLen = codeSpaceMatch ? codeSpaceMatch[1].length / 2 : 1;
 
-    const charMap = new Map();
-
-    for (const block of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
-      for (const m of block[1].matchAll(
-        /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g,
-      )) {
-        const start = parseInt(m[1], 16);
-        const end = parseInt(m[2], 16);
-        let dst = parseInt(m[3], 16);
-        for (let code = start; code <= end; code++) {
-          charMap.set(
-            code.toString(16).padStart(keyLen * 2, "0"),
-            String.fromCodePoint(dst++),
-          );
-        }
-      }
-    }
-
+    const charMap = parseToUnicodeCMap(text, keyLen);
     if (charMap.size > 0) result.set(cmapName, { keyLen, map: charMap });
   }
 

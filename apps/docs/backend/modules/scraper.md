@@ -86,6 +86,10 @@ Three-tier strategy, in order:
 
 See [Geolocation](/concepts/geolocation) for why the static tier exists and its known failure mode.
 
+### KAM PDF Text Extraction
+
+KAM publishes each store's pricelist as a PDF, read by the dependency-free `utils/pdf-text-extractor.js`. Glyph codes are mapped to Unicode through each font's ToUnicode CMap, supporting `bfchar`, `bfrange` with hex destinations (the last UTF-16 code unit increments per code) and `bfrange` with array destinations. Destinations are decoded as UTF-16BE, so ligatures (`<00660069>` = "fi") and surrogate pairs work. Malformed entries are skipped instead of failing the store.
+
 ### Price Parsing
 
 All scrapers parse prices with `utils/parsePrice.js`, which accepts both `1.299,00` and `1,299.00` styles, spaces (including NBSP) as thousands separators, and currency text. When both `.` and `,` appear, the last one is the decimal separator. A single separator followed by exactly three digits (`2.450`) is read as thousands, since MKD grocery prices don't have three decimals. Code that runs inside `page.evaluate` (the shared table extractor, Ramstore's DataTables fast path, Kipper's AJAX loop) returns the raw `priceText`, and Node parses it with `withParsedPrices`, because browser-context functions can't import modules.
