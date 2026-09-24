@@ -38,10 +38,15 @@ const makeRepos = ({ previousCount }) => ({
     bulkUpsert: vi.fn(),
     countSeenInLatestScrape: vi.fn().mockResolvedValue(previousCount),
     deleteUnseenSince: vi.fn().mockResolvedValue({ deletedCount: 3 }),
+    findUnseenProductIds: vi.fn().mockResolvedValue(["gone-1", "gone-2"]),
     backfillLastSeen: vi.fn().mockResolvedValue({ stamped: 0, adminOwned: 0 }),
   },
   image: { findByTitle: vi.fn().mockResolvedValue({ _id: "img" }) },
   geocoder: { geocode: vi.fn() },
+  orphans: {
+    removeOrphans: vi.fn().mockResolvedValue(2),
+    sweep: vi.fn().mockResolvedValue(0),
+  },
 });
 
 const products = (n) =>
@@ -65,6 +70,7 @@ const run = async ({ previousCount, result }) => {
     repos.marketProduct,
     repos.image,
     repos.geocoder,
+    repos.orphans,
   );
   await sut.runForMarket(makeScraper(result));
   return { repos, sut };
@@ -134,5 +140,32 @@ describe("ScraperService stale price cleanup", () => {
       scrapedMarketIds: ["m1"],
       adminProductIds: ["admin-product"],
     });
+  });
+
+  it("removes products that lost their last price once the chain's run is done", async () => {
+    const { repos } = await run({
+      previousCount: 10,
+      result: { upToDate: false, products: products(8), newUpdateDate: new Date() },
+    });
+
+    const [candidates] = repos.orphans.removeOrphans.mock.calls[0];
+    expect([...candidates]).toEqual(["gone-1", "gone-2"]);
+  });
+
+  it("doesn't look for orphans when no prices were removed", async () => {
+    const { repos } = await run({
+      previousCount: 900,
+      result: { upToDate: false, products: products(40), newUpdateDate: new Date() },
+    });
+
+    expect(repos.orphans.removeOrphans).not.toHaveBeenCalled();
+  });
+
+  it("sweeps existing orphans once per process", async () => {
+    const { repos, sut } = await run({ previousCount: 10, result: { upToDate: true } });
+    await sut.runForMarket(makeScraper({ upToDate: true }));
+    await sut.sweepOrphanProducts();
+
+    expect(repos.orphans.sweep).toHaveBeenCalledTimes(1);
   });
 });

@@ -36,6 +36,11 @@ const mockMarketRepository = {
 
 const mockMarketProductRepository = {
   deleteByMarket: vi.fn(),
+  findProductIdsByMarket: vi.fn().mockResolvedValue([]),
+};
+
+const mockOrphanProductService = {
+  removeOrphans: vi.fn(),
 };
 
 const mockImageService = {
@@ -49,6 +54,7 @@ const makeSut = () =>
     mockMarketRepository,
     mockMarketProductRepository,
     mockImageService,
+    mockOrphanProductService,
   );
 
 beforeEach(() => vi.clearAllMocks());
@@ -180,6 +186,23 @@ describe("ChainService", () => {
       expect(mockMarketProductRepository.deleteByMarket).toHaveBeenCalledTimes(2);
       expect(mockMarketRepository.delete).toHaveBeenCalledTimes(2);
       expect(mockChainRepository.delete).toHaveBeenCalledWith(chain);
+    });
+
+    it("removes products left without prices after deleting the chain's markets", async () => {
+      mockChainRepository.findById.mockResolvedValue({ _id: "v1" });
+      mockMarketRepository.findByChain.mockResolvedValue([{ _id: "m1" }, { _id: "m2" }]);
+      mockMarketProductRepository.findProductIdsByMarket
+        .mockResolvedValueOnce(["p1", "p2"])
+        .mockResolvedValueOnce(["p2", "p3"]);
+      const order = [];
+      mockMarketProductRepository.deleteByMarket.mockImplementation(async () => order.push("rows"));
+      mockOrphanProductService.removeOrphans.mockImplementation(async () => order.push("orphans"));
+      const sut = makeSut();
+
+      await sut.deleteChain("v1");
+
+      expect(mockOrphanProductService.removeOrphans).toHaveBeenCalledWith(["p1", "p2", "p2", "p3"]);
+      expect(order.at(-1)).toBe("orphans");
     });
 
     it("cleans up the chain's image after deleting it", async () => {

@@ -23,7 +23,6 @@ Automated web scraping pipeline using Puppeteer with concurrent tabs, market dis
 | `stokomak.scraper.js` | Stokomak scraper |
 | `kam.scraper.js` | KAM scraper |
 | `superkitgo.scraper.js` | SuperKitGo scraper |
-| `kipper.scraper.js` | Kipper scraper |
 | `utils/` | Shared scraping utilities |
 
 ### Scripts
@@ -65,6 +64,14 @@ Each scrape stamps `lastSeenAt` on every MarketProduct row it upserts. After a s
 - Stores whose pricelist is unchanged (`upToDate`) are skipped entirely, so nothing is deleted.
 - Rows created before `lastSeenAt` existed are backfilled once per process, before the first scrape: rows in scraped markets are stamped as long unseen unless their product has a description or image (admin-only fields), which are marked admin-owned.
 
+### Orphaned Products
+
+A product whose last price row is gone (stale price cleanup, or a market or chain delete) is deleted together with its embedding. Only scraper-made products are removed: a product with a description or image was edited by an admin and is kept even without prices.
+
+- During a scrape, candidates are collected from the rows each store's cleanup removed, and removed once the whole chain's run has finished. Stores are scraped in parallel tabs, so a product that looks unpriced mid-run may be about to get a price from another store.
+- Every candidate is re-checked for price rows right before deletion.
+- Orphans that already exist are swept once per process, at startup and before the first scrape in standalone scripts.
+
 ### Strategy + Registry Pattern
 
 Each market scraper implements a common interface and registers itself in the scraper registry. The orchestrator iterates the registry without knowing scraper internals.
@@ -92,7 +99,7 @@ KAM publishes each store's pricelist as a PDF, read by the dependency-free `util
 
 ### Price Parsing
 
-All scrapers parse prices with `utils/parsePrice.js`, which accepts both `1.299,00` and `1,299.00` styles, spaces (including NBSP) as thousands separators, and currency text. When both `.` and `,` appear, the last one is the decimal separator. A single separator followed by exactly three digits (`2.450`) is read as thousands, since MKD grocery prices don't have three decimals. Code that runs inside `page.evaluate` (the shared table extractor, Ramstore's DataTables fast path, Kipper's AJAX loop) returns the raw `priceText`, and Node parses it with `withParsedPrices`, because browser-context functions can't import modules.
+All scrapers parse prices with `utils/parsePrice.js`, which accepts both `1.299,00` and `1,299.00` styles, spaces (including NBSP) as thousands separators, and currency text. When both `.` and `,` appear, the last one is the decimal separator. A single separator followed by exactly three digits (`2.450`) is read as thousands, since MKD grocery prices don't have three decimals. Code that runs inside `page.evaluate` (the shared table extractor and Ramstore's DataTables fast path) returns the raw `priceText`, and Node parses it with `withParsedPrices`, because browser-context functions can't import modules.
 
 ### Performance Optimizations
 

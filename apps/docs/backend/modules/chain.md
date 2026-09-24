@@ -40,6 +40,7 @@ Deleting a chain removes:
 1. All associated **Markets** linked to the chain.
 2. All **MarketProduct** junction records for those markets.
 3. The chain's **Image**, if no other chain or product uses it and it isn't a seeded `chain-<key>` placeholder.
+4. **Products** left with no price in any market, with their embeddings, unless an admin edited them (description or image). See [orphaned products](./scraper.md#orphaned-products).
 
 ```mermaid
 flowchart TD
@@ -48,6 +49,7 @@ flowchart TD
     C --> D[Delete Markets]
     D --> E[Delete Chain document]
     E --> F[Delete image if unused]
+    E --> G[Delete products left with no prices]
 ```
 
 ## Source Anchors

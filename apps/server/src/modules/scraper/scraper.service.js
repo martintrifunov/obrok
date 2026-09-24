@@ -35,6 +35,7 @@ export class ScraperService {
     marketProductRepository,
     imageRepository,
     geocoderService,
+    orphanProductService = null,
   ) {
     this.chainRepository = chainRepository;
     this.marketRepository = marketRepository;
@@ -42,7 +43,32 @@ export class ScraperService {
     this.marketProductRepository = marketProductRepository;
     this.imageRepository = imageRepository;
     this.geocoderService = geocoderService;
+    this.orphanProductService = orphanProductService;
     this.legacyPriceRowsBackfilled = false;
+    this.orphanProductsSwept = false;
+  }
+
+  /** Idempotent; removes products that already have no prices (startup and first scrape). */
+  async sweepOrphanProducts() {
+    if (this.orphanProductsSwept || !this.orphanProductService) return;
+
+    const removed = await this.orphanProductService.sweep();
+    if (removed) {
+      console.log(`[ScraperService] Removed ${removed} products with no prices left.`);
+    }
+    this.orphanProductsSwept = true;
+  }
+
+  async #removeOrphanProducts(name, candidates) {
+    if (!this.orphanProductService || !candidates.size) return;
+    try {
+      const removed = await this.orphanProductService.removeOrphans(candidates);
+      if (removed) {
+        console.log(`[Scraper] 🧹 [${name}] Removed ${removed} products no store sells anymore.`);
+      }
+    } catch (err) {
+      console.error(`[Scraper] [${name}] Orphan product cleanup failed:`, err.message);
+    }
   }
 
   /** Idempotent; runs at startup and before the first scrape in standalone scripts. */
@@ -65,7 +91,15 @@ export class ScraperService {
     this.legacyPriceRowsBackfilled = true;
   }
 
-  async #removeStalePrices({ name, marketDoc, seenCount, previousCount, seenAt, complete }) {
+  async #removeStalePrices({
+    name,
+    marketDoc,
+    seenCount,
+    previousCount,
+    seenAt,
+    complete,
+    orphanCandidates,
+  }) {
     if (!complete) {
       console.warn(`[Scraper] ⚠️  [${name}] Incomplete scrape; keeping unseen prices.`);
       return;
@@ -77,10 +111,15 @@ export class ScraperService {
       return;
     }
 
+    const unseenProducts = await this.marketProductRepository.findUnseenProductIds(
+      marketDoc._id,
+      seenAt,
+    );
     const { deletedCount } = await this.marketProductRepository.deleteUnseenSince(
       marketDoc._id,
       seenAt,
     );
+    unseenProducts.forEach((id) => orphanCandidates.add(id));
     if (deletedCount) {
       console.log(`[Scraper] 🧹 [${name}] Removed ${deletedCount} delisted or unavailable prices.`);
     }
@@ -89,6 +128,7 @@ export class ScraperService {
   async runForMarket(scraper) {
     const startTime = performance.now();
     await this.backfillLegacyPriceRows();
+    await this.sweepOrphanProducts();
     console.log(`\n[ScraperService] 🚀 Starting ${scraper.constructor.name}`);
     console.log(
       `[ScraperService] Settings: concurrency=${CONCURRENT_TABS}, navTimeout=${NAV_TIMEOUT_MS}ms, protocolTimeout=${PROTOCOL_TIMEOUT_MS}ms`,
@@ -123,6 +163,11 @@ export class ScraperService {
       ],
     });
 
+    // Products that lost a price this run. Removed only after every store of the
+    // chain is done: tabs run in parallel, and another store may be about to
+    // price a product that looks unpriced mid-run.
+    const orphanCandidates = new Set();
+
     try {
       const setupPage = await browser.newPage();
       await this.#optimizePage(setupPage);
@@ -147,11 +192,14 @@ export class ScraperService {
       for (let i = 0; i < readyMarkets.length; i += CONCURRENT_TABS) {
         const batch = readyMarkets.slice(i, i + CONCURRENT_TABS);
         await Promise.all(
-          batch.map((m) => this.#scrapeAndSaveStore(m, scraper, browser)),
+          batch.map((m) =>
+            this.#scrapeAndSaveStore(m, scraper, browser, orphanCandidates),
+          ),
         );
       }
     } finally {
       await browser.close();
+      await this.#removeOrphanProducts(scraper.chainName, orphanCandidates);
       const duration = ((performance.now() - startTime) / 1000).toFixed(2);
       console.log(
         `\n[ScraperService] ✅ Finished ${scraper.constructor.name} in ${duration}s`,
@@ -207,7 +255,7 @@ export class ScraperService {
     });
   }
 
-  async #scrapeAndSaveStore(marketData, scraper, browser) {
+  async #scrapeAndSaveStore(marketData, scraper, browser, orphanCandidates) {
     const { name, pricelistUrl, marketDoc } = marketData;
     const tabStartTime = performance.now();
     let page = null;
@@ -293,6 +341,7 @@ export class ScraperService {
         previousCount,
         seenAt,
         complete: result.complete !== false,
+        orphanCandidates,
       });
 
       if (result.newUpdateDate) {

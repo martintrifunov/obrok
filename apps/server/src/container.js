@@ -3,6 +3,7 @@ import { ImageRepository } from "./modules/image/image.repository.js";
 import { ChainRepository } from "./modules/chain/chain.repository.js";
 import { ProductRepository } from "./modules/product/product.repository.js";
 import { MarketProductRepository } from "./modules/product/market-product.repository.js";
+import { OrphanProductService } from "./modules/product/orphan-product.service.js";
 import { MarketRepository } from "./modules/market/market.repository.js";
 import { FeatureFlagRepository } from "./modules/feature-flag/feature-flag.repository.js";
 
@@ -54,6 +55,11 @@ const tokenService = new TokenService();
 const fileService = new FileService();
 const authService = new AuthService(authRepository, tokenService);
 const imageService = new ImageService(imageRepository, fileService);
+const orphanProductService = new OrphanProductService(
+  productRepository,
+  marketProductRepository,
+  productEmbeddingRepository,
+);
 
 const chainService = new ChainService(
   chainRepository,
@@ -61,6 +67,7 @@ const chainService = new ChainService(
   marketRepository,
   marketProductRepository,
   imageService,
+  orphanProductService,
 );
 
 const productService = new ProductService(
@@ -76,6 +83,7 @@ const marketService = new MarketService(
   marketRepository,
   chainRepository,
   marketProductRepository,
+  orphanProductService,
 );
 
 const geocoderService = new GeocoderService();
@@ -115,6 +123,7 @@ export const scraperService = new ScraperService(
   marketProductRepository,
   imageRepository,
   geocoderService,
+  orphanProductService,
 );
 
 export const authController = new AuthController(authService, tokenService);

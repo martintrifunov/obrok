@@ -206,6 +206,26 @@ export class MarketProductRepository {
     return MarketProductModel.create(data);
   }
 
+  /** Products whose rows deleteUnseenSince(marketId, seenAt) would remove. */
+  async findUnseenProductIds(marketId, seenAt) {
+    return MarketProductModel.distinct("product", {
+      market: marketId,
+      lastSeenAt: { $ne: null, $lt: seenAt },
+    }).exec();
+  }
+
+  async findProductIdsByMarket(marketId) {
+    return MarketProductModel.distinct("product", { market: marketId }).exec();
+  }
+
+  /** The subset of productIds that still have at least one price row. */
+  async findPricedProductIds(productIds) {
+    if (!productIds.length) return [];
+    return MarketProductModel.distinct("product", {
+      product: { $in: productIds },
+    }).exec();
+  }
+
   async deleteByMarket(marketId, options = {}) {
     return MarketProductModel.deleteMany({ market: marketId }, options).exec();
   }

@@ -1,6 +1,13 @@
 import { ProductModel } from "./product.model.js";
 import { buildBilingualRegex } from "../../shared/utils/bilingualRegex.js";
 
+// Products the scraper could have made: it only sets title and category, so any
+// description or image means an admin touched it. Null also matches a missing field.
+const SCRAPER_MADE = {
+  description: { $in: [null, ""] },
+  image: null,
+};
+
 export class ProductRepository {
   #populate() {
     return {
@@ -115,6 +122,36 @@ export class ProductRepository {
         { image: { $ne: null } },
       ],
     }).exec();
+  }
+
+  async findScraperMadeIds(ids) {
+    if (!ids.length) return [];
+    return ProductModel.distinct("_id", { _id: { $in: ids }, ...SCRAPER_MADE }).exec();
+  }
+
+  /** Scraper-made products with no price rows at all. */
+  async findUnpricedScraperMadeIds() {
+    const rows = await ProductModel.aggregate([
+      { $match: SCRAPER_MADE },
+      {
+        $lookup: {
+          from: "market_products",
+          localField: "_id",
+          foreignField: "product",
+          pipeline: [{ $limit: 1 }, { $project: { _id: 1 } }],
+          as: "prices",
+        },
+      },
+      { $match: { prices: { $size: 0 } } },
+      { $project: { _id: 1 } },
+    ]).exec();
+    return rows.map((row) => row._id);
+  }
+
+  /** Deletes scraper-made products by id; admin-edited ones are never deleted here. */
+  async deleteScraperMadeByIds(ids) {
+    if (!ids.length) return { deletedCount: 0 };
+    return ProductModel.deleteMany({ _id: { $in: ids }, ...SCRAPER_MADE }).exec();
   }
 
   async getUniqueCategories() {

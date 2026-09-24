@@ -46,6 +46,11 @@ export class ProductEmbeddingRepository {
     return ProductEmbeddingModel.deleteOne({ product: productId }, options).exec();
   }
 
+  async deleteByProducts(productIds) {
+    if (!productIds.length) return { deletedCount: 0 };
+    return ProductEmbeddingModel.deleteMany({ product: { $in: productIds } }).exec();
+  }
+
   async count() {
     return ProductEmbeddingModel.countDocuments().exec();
   }

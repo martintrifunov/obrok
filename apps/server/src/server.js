@@ -49,6 +49,7 @@ const start = async () => {
 
   // Price rows created before lastSeenAt existed need it before admins can edit them.
   await scraperService.backfillLegacyPriceRows();
+  await scraperService.sweepOrphanProducts();
 
   const aborted = await reportService.abortInterruptedJobs();
   if (aborted > 0) console.log(`Marked ${aborted} interrupted report job(s) as aborted.`);
