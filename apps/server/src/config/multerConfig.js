@@ -1,6 +1,7 @@
 import multer from "multer";
 import path from "path";
 import crypto from "crypto";
+import { AppError } from "../shared/errors/AppError.js";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -21,7 +22,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only .jpeg, .jpg, .png, and .webp files are allowed."));
+    cb(new AppError("Only .jpeg, .jpg, .png, and .webp files are allowed.", 400));
   }
 };
 
