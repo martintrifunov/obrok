@@ -101,8 +101,8 @@ export class AnalyticsRepository {
       totalVisits,
       uniqueVisitorsRows,
       currentMonthUniqueRows,
-      monthlyRowsRaw,
       monthlyRowsArchived,
+      monthlyRowsRaw,
       dailyRows,
       featureTotals,
       featureUsageDaily,
@@ -120,10 +120,13 @@ export class AnalyticsRepository {
           { $group: { _id: "$identityKey" } },
           { $count: "count" },
         ]),
-        AnalyticsEventModel.aggregate([
+        // Months archived by the cleanup cron before their raw events were deleted.
+        AnalyticsMonthlyAggregateModel.aggregate([
           {
             $match: {
-              monthStart: { $gte: from, $lte: to },
+              // Any month overlapping the range, not just months starting inside it.
+              monthStart: { $lte: to },
+              monthEnd: { $gte: from },
             },
           },
           {
