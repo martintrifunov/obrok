@@ -210,10 +210,14 @@ export class ScraperService {
   async #scrapeAndSaveStore(marketData, scraper, browser) {
     const { name, pricelistUrl, marketDoc } = marketData;
     const tabStartTime = performance.now();
-    let page = await browser.newPage();
-    await this.#optimizePage(page);
+    let page = null;
 
+    // Everything per store stays inside the try: a crashed tab (newPage, setup,
+    // or close failing) must only skip this store, not reject the whole batch.
     try {
+      page = await browser.newPage();
+      await this.#optimizePage(page);
+
       let result;
       let lastError;
 
@@ -305,7 +309,7 @@ export class ScraperService {
     } catch (err) {
       console.error(`[ScraperService] Error in [${name}]:`, err.message);
     } finally {
-      await page.close();
+      await page?.close().catch(() => {});
     }
   }
 
