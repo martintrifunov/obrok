@@ -11,7 +11,8 @@ RUN apk add --no-cache \
     ttf-freefont \
     udev
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+# Use the Alpine Chromium below; Puppeteer 24 reads PUPPETEER_SKIP_DOWNLOAD (the old name is ignored).
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 RUN chown node:node /app

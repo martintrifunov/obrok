@@ -34,4 +34,5 @@ jobs:
           
           git remote add gitlab https://oauth2:${GITLAB_TOKEN}@gitlab.finki.ukim.mk/193254/obrok.git
 
-          git push gitlab main:main --force
+          # origin/main, not the local main: a manual run from another branch has no local main.
+          git push gitlab origin/main:refs/heads/main --force

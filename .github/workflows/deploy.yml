@@ -74,7 +74,8 @@ jobs:
             cd "$APP_DIR"
             
             echo "--- Fetching latest code for $RELEASE_TAG ---"
-            git fetch --tags
+            # --force: a release tag that was deleted and re-created must replace the old one
+            git fetch --tags --force
             git checkout -f $RELEASE_TAG
             
             echo "--- Injecting Dynamic Version into Frontend ---"
