@@ -6,7 +6,7 @@ import { startScraperCron } from "./modules/scraper/scraper.cron.js";
 import { startAnalyticsCron } from "./modules/analytics/analytics.cron.js";
 import { seedChainImages } from "./infrastructure/database/seed-chain-images.js";
 import { seedFeatureFlags } from "./infrastructure/database/seed-feature-flags.js";
-import { scraperService, analyticsService, embeddingService, productEmbeddingRepository, productRepository, featureFlagService, reportService } from "./container.js";
+import { scraperService, analyticsService, embeddingService, productEmbeddingRepository, featureFlagService, reportService } from "./container.js";
 
 const PORT = process.env.PORT || 5000;
 // Docker sends SIGKILL 10s after SIGTERM; finish before that.
@@ -55,7 +55,7 @@ const start = async () => {
   await reportService.cleanupStaleReports();
 
   const cronTasks = [
-    startScraperCron(scraperService, embeddingService, productEmbeddingRepository, productRepository, featureFlagService),
+    startScraperCron(scraperService, embeddingService, productEmbeddingRepository, featureFlagService),
     startAnalyticsCron(analyticsService),
   ];
 

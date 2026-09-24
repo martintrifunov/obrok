@@ -10,14 +10,12 @@ import { APP_TIME_ZONE } from "../../shared/utils/calendarDate.js";
  * @param {import('./scraper.service.js').ScraperService} scraperService
  * @param {import('../search/embedding.service.js').EmbeddingService} embeddingService
  * @param {import('../search/product-embedding.repository.js').ProductEmbeddingRepository} productEmbeddingRepository
- * @param {import('../product/product.repository.js').ProductRepository} productRepository
  * @param {import('../feature-flag/feature-flag.service.js').FeatureFlagService} featureFlagService
  */
 export const startScraperCron = (
   scraperService,
   embeddingService,
   productEmbeddingRepository,
-  productRepository,
   featureFlagService,
 ) => {
   const task = cron.schedule("0 3 * * 1,4", async () => {
