@@ -1,5 +1,6 @@
 import { BASE_API_URL } from "./consts";
 import { useAuthStore } from "@/store/authStore";
+import { getVisitorId, VISITOR_ID_HEADER } from "./visitorId";
 
 class HttpError extends Error {
   constructor(status, data) {
@@ -21,9 +22,15 @@ async function handleResponse(res, raw) {
   return data;
 }
 
+function baseHeaders(init) {
+  const headers = new Headers(init);
+  if (!headers.has(VISITOR_ID_HEADER)) headers.set(VISITOR_ID_HEADER, getVisitorId());
+  return headers;
+}
+
 export async function fetchPublic(path, options = {}) {
   const { raw, ...fetchOptions } = options;
-  const headers = new Headers(fetchOptions.headers);
+  const headers = baseHeaders(fetchOptions.headers);
   if (!headers.has("Content-Type") && !(fetchOptions.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
@@ -63,7 +70,7 @@ async function refreshAccessToken() {
 export async function fetchPrivate(path, options = {}) {
   const { raw, ...fetchOptions } = options;
   const { auth } = useAuthStore.getState();
-  const headers = new Headers(fetchOptions.headers);
+  const headers = baseHeaders(fetchOptions.headers);
   if (auth?.accessToken && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${auth.accessToken}`);
   }
@@ -79,7 +86,7 @@ export async function fetchPrivate(path, options = {}) {
 
   if (res.status === 401) {
     const newToken = await refreshAccessToken();
-    const retryHeaders = new Headers(fetchOptions.headers);
+    const retryHeaders = baseHeaders(fetchOptions.headers);
     retryHeaders.set("Authorization", `Bearer ${newToken}`);
     if (!retryHeaders.has("Content-Type") && !(fetchOptions.body instanceof FormData)) {
       retryHeaders.set("Content-Type", "application/json");
