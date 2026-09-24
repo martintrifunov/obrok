@@ -35,6 +35,22 @@ describe("BaseScraper", () => {
       expect(result).toEqual(new Date(2026, 5, 1, 12, 0));
     });
 
+    it("keeps PM when the time has seconds", () => {
+      const result = scraper.parseUpdateDate("12.03.2026 9:30:15 PM");
+      expect(result).toEqual(new Date(2026, 2, 12, 21, 30, 15));
+    });
+
+    it("parses seconds without AM/PM", () => {
+      const result = scraper.parseUpdateDate("12.03.2026 21:30:15");
+      expect(result).toEqual(new Date(2026, 2, 12, 21, 30, 15));
+    });
+
+    it("tells a morning and evening pricelist on the same day apart", () => {
+      const am = scraper.parseUpdateDate("12.03.2026 9:30:15 AM");
+      const pm = scraper.parseUpdateDate("12.03.2026 9:30:15 PM");
+      expect(am.getTime()).not.toBe(pm.getTime());
+    });
+
     it("handles 12 AM as midnight", () => {
       const result = scraper.parseUpdateDate("01.06.2026 12:00 AM");
       expect(result).toEqual(new Date(2026, 5, 1, 0, 0));

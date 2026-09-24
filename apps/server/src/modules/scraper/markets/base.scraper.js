@@ -95,19 +95,29 @@ export class BaseScraper {
   }
 
   /**
-   * Parse a pricelist "last updated" string such as "12.03.2026 9:30 PM".
+   * Parse a pricelist "last updated" string such as "12.03.2026 9:30 PM" or
+   * "12.03.2026 9:30:15 PM" (KAM includes seconds).
    * @param {string | null | undefined} raw
    * @returns {Date | null}
    */
   parseUpdateDate(raw) {
     if (!raw) return null;
-    const m = raw.match(/(\d{1,2})[./](\d{1,2})[./](\d{4})\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    const m = raw.match(
+      /(\d{1,2})[./](\d{1,2})[./](\d{4})\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i,
+    );
     if (!m) return null;
-    const [, day, month, year, rawHours, minutes, ampm] = m;
+    const [, day, month, year, rawHours, minutes, seconds = "0", ampm] = m;
     let hours = Number(rawHours);
     if (ampm?.toUpperCase() === 'PM' && hours < 12) hours += 12;
     if (ampm?.toUpperCase() === 'AM' && hours === 12) hours = 0;
-    return new Date(Number(year), Number(month) - 1, Number(day), hours, Number(minutes));
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      hours,
+      Number(minutes),
+      Number(seconds),
+    );
   }
 
   /**
