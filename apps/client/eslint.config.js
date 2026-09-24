@@ -27,14 +27,16 @@ export default [
       ...reactHooks.configs.recommended.rules,
       "react/jsx-no-target-blank": "off",
       "react/prop-types": "off",
-      // New React Compiler rule; existing effects that sync server data into
-      // form state predate it. Re-enable once those are refactored.
-      "react-hooks/set-state-in-effect": "off",
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
       ],
     },
+  },
+  {
+    // Test helpers and specs are never hot-reloaded, so fast-refresh export rules don't apply.
+    files: ["src/test/**", "**/*.test.{js,jsx}"],
+    rules: { "react-refresh/only-export-components": "off" },
   },
   {
     files: ["vite.config.js"],

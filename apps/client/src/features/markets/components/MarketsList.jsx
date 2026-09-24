@@ -24,6 +24,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import { useNavigate, useLocation } from "react-router-dom";
 import useDebounce from "@/hooks/useDebounce";
+import useResettablePage from "@/hooks/useResettablePage";
 import SharedMarketProductsModal from "@/components/ui/SharedMarketProductsModal";
 import {
   useMarkets,
@@ -36,16 +37,12 @@ const MarketsList = ({ searchTerm }) => {
   const location = useLocation();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [page, setPage] = useState(0);
   const rowsPerPage = 5;
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState({ id: null, name: "" });
 
   const debouncedSearch = useDebounce(searchTerm);
-
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedSearch]);
+  const [page, setPage] = useResettablePage(debouncedSearch);
 
   const {
     data: responseData,

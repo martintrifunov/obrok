@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   Typography,
   Table,
@@ -22,6 +22,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useNavigate, useLocation } from "react-router-dom";
 import useDebounce from "@/hooks/useDebounce";
+import useResettablePage from "@/hooks/useResettablePage";
 import ImagePreviewModal from "@/components/ui/ImagePreviewModal";
 import { BASE_URL } from "@/api/consts";
 import {
@@ -34,14 +35,10 @@ const ProductsList = ({ searchTerm }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
-  const [page, setPage] = useState(0);
   const rowsPerPage = 5;
 
   const debouncedSearch = useDebounce(searchTerm);
-
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedSearch]);
+  const [page, setPage] = useResettablePage(debouncedSearch);
 
   const {
     data: responseData,
