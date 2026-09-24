@@ -5,6 +5,10 @@ import { ProductModel } from "../product/product.model.js";
 import { MarketProductModel } from "../product/market-product.model.js";
 
 const RRF_K = 60;
+const KEYWORD_LIMIT = 100;
+// Over-fetch before dropping products without prices, so they can't crowd out
+// priced ones in the top results.
+const KEYWORD_OVERFETCH = 500;
 
 const cosineSimilarity = (a, b) => {
   let dot = 0;
@@ -125,7 +129,7 @@ export class SearchService {
         .limit(2000)
         .lean()
         .exec();
-      candidateProductIds = keywordMatches.map((p) => p._id);
+      candidateProductIds = await this.#keepPriced(keywordMatches.map((p) => p._id));
     }
 
     if (candidateProductIds.length === 0) return [];
@@ -166,7 +170,7 @@ export class SearchService {
             "and",
           ),
         },
-        { $limit: 100 },
+        { $limit: KEYWORD_LIMIT },
         { $project: { "product._id": 1 } },
       ];
 
@@ -181,14 +185,30 @@ export class SearchService {
       ...buildFieldMatchClauses(tokenPatterns, ["title", "category"], "and"),
     })
       .select("_id")
-      .limit(100)
+      .limit(KEYWORD_OVERFETCH)
       .lean()
       .exec();
+    const priced = await this.#keepPriced(products.map((p) => p._id));
 
-    return products.map((p, i) => ({
-      productId: p._id.toString(),
+    return priced.slice(0, KEYWORD_LIMIT).map((id, i) => ({
+      productId: id.toString(),
       score: 1 / (i + 1),
     }));
+  }
+
+  /**
+   * Keeps products sold at at least one market, preserving order. Products whose
+   * last price was removed by the scraper's stale-price cleanup stay in the
+   * catalog but must not show up as search results. (The market-scoped paths
+   * start from that market's price rows, so they never need this.)
+   */
+  async #keepPriced(productIds) {
+    if (!productIds.length) return [];
+    const pricedIds = await MarketProductModel.distinct("product", {
+      product: { $in: productIds },
+    });
+    const priced = new Set(pricedIds.map((id) => id.toString()));
+    return productIds.filter((id) => priced.has(id.toString()));
   }
 
   #rrfMerge(vectorResults, keywordResults) {

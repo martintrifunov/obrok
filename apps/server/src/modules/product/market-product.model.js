@@ -19,6 +19,8 @@ const MarketProductSchema = new mongoose.Schema({
 
 MarketProductSchema.index({ market: 1, product: 1 }, { unique: true });
 MarketProductSchema.index({ market: 1, lastSeenAt: 1 });
+// Search looks up price rows by product (priced-product filter, hydration).
+MarketProductSchema.index({ product: 1 });
 
 export const MarketProductModel = mongoose.model(
   "MarketProduct",
