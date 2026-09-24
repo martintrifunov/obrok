@@ -16,14 +16,12 @@ describe("buildBilingualRegex", () => {
 
   it("returns regex pattern with latin and cyrillic alternatives", () => {
     const result = buildBilingualRegex("mleko");
-    expect(result).toContain("mleko");
-    expect(result).toContain("млеко");
-    expect(result).toContain("|");
+    expect(matches(result, "Mleko 1l")).toBe(true);
+    expect(matches(result, "Млеко 1л")).toBe(true);
   });
 
   it("handles multi-char transliterations (sh, ch, etc.)", () => {
-    const result = buildBilingualRegex("sheker");
-    expect(result).toContain("шекер");
+    expect(matches(buildBilingualRegex("sheker"), "Шекер")).toBe(true);
   });
 
   it("escapes regex special characters", () => {
@@ -39,12 +37,25 @@ describe("buildBilingualRegex", () => {
 
   it("splits multi-word input into token regexes", () => {
     const result = buildBilingualTokenRegexes("monster jagoda");
-    expect(result).toEqual(["monster|монстер", "jagoda|јагода"]);
+    expect(result).toHaveLength(2);
+    expect(matches(result[0], "Монстер")).toBe(true);
+    expect(matches(result[1], "Јагода")).toBe(true);
   });
 
   it("ignores repeated whitespace when building token regexes", () => {
     const result = buildBilingualTokenRegexes("  monster   jagoda  ");
     expect(result).toHaveLength(2);
+  });
+
+  it("lets plain ASCII input find titles spelled with diacritics or ш/ч/ж/ѓ/ќ", () => {
+    const kaskaval = buildBilingualRegex("kaskaval");
+    for (const title of ["Kaškaval 400g", "Кашкавал", "KASKAVAL", "каскавал"]) {
+      expect(matches(kaskaval, title)).toBe(true);
+    }
+    expect(matches(buildBilingualRegex("secer"), "Шеќер кристал")).toBe(true);
+    expect(matches(buildBilingualRegex("cokolado"), "Čokolado")).toBe(true);
+    expect(matches(buildBilingualRegex("cokolado"), "Чоколадо")).toBe(true);
+    expect(matches(buildBilingualRegex("mleko"), "Kafe")).toBe(false);
   });
 
   it("maps Macedonian Latin diacritics instead of producing mixed scripts", () => {

@@ -155,9 +155,23 @@ const spellingVariants = (text) => {
   return [...new Set(variants)];
 };
 
+// Plain ASCII input is ambiguous: "kaskaval" may be a folded "kaškaval" (кашкавал).
+// Each lossy letter matches every letter it could stand for, in both scripts.
+const ASCII_RE = /^\p{ASCII}*$/u;
+const LATIN_AMBIGUOUS = { s: "[sš]", c: "[cčć]", z: "[zž]", g: "[gǵ]", k: "[kḱ]" };
+const CYRILLIC_AMBIGUOUS = { с: "[сш]", ц: "[цчќ]", з: "[зж]", г: "[гѓ]", к: "[кќ]" };
+
+const widen = (escaped, table) =>
+  [...escaped].map((ch) => table[ch.toLowerCase()] ?? ch).join("");
+
 export const buildBilingualRegex = (text) => {
   if (!text) return null;
-  return spellingVariants(text).map(escapeRegExp).join("|");
+  const variants = spellingVariants(text).map(escapeRegExp);
+  if (!ASCII_RE.test(text)) return variants.join("|");
+
+  // ASCII input yields exactly [as typed, Cyrillic transliteration].
+  const [latin, cyrillic] = variants;
+  return [widen(latin, LATIN_AMBIGUOUS), widen(cyrillic, CYRILLIC_AMBIGUOUS)].join("|");
 };
 
 export const buildBilingualTokenRegexes = (text) => {
