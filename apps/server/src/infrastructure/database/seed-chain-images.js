@@ -16,7 +16,6 @@ const CHAIN_IMAGE_DEFS = [
   { key: "stokomak", title: "chain-stokomak" },
   { key: "kam", title: "chain-kam" },
   { key: "superkitgo", title: "chain-superkitgo" },
-  { key: "kipper", title: "chain-kipper" },
 ];
 
 const SUPPORTED_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".svg"];
