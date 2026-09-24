@@ -28,16 +28,17 @@ const vero = { _id: "m-vero", name: "Vero 1", chain: { name: "Vero" } };
 const manualA = { _id: "m-a", name: "Pazar", chain: { name: "Local" } };
 const manualB = { _id: "m-b", name: "Kiosk", chain: { name: "Local" } };
 
-const renderForm = () =>
-  render(
-    <MemoryRouter initialEntries={["/dashboard/products/p1"]}>
-      <ThemeProvider theme={createTheme()}>
-        <Routes>
-          <Route path="/dashboard/products/:productId" element={<AddOrEditProductForm />} />
-        </Routes>
-      </ThemeProvider>
-    </MemoryRouter>,
-  );
+const theme = createTheme();
+const formTree = () => (
+  <MemoryRouter initialEntries={["/dashboard/products/p1"]}>
+    <ThemeProvider theme={theme}>
+      <Routes>
+        <Route path="/dashboard/products/:productId" element={<AddOrEditProductForm />} />
+      </Routes>
+    </ThemeProvider>
+  </MemoryRouter>
+);
+const renderForm = () => render(formTree());
 
 const save = () => fireEvent.click(screen.getByRole("button", { name: /save/i }));
 const sentData = () => mutate.mock.calls.at(-1)[0];
@@ -55,6 +56,27 @@ beforeEach(() => {
       { market: manualB, price: 80, lastSeenAt: null },
     ],
   };
+});
+
+describe("AddOrEditProductForm initialization", () => {
+  it("fills the form from the loaded product", () => {
+    renderForm();
+    expect(screen.getByLabelText("Title")).toHaveValue("Млеко 1л");
+  });
+
+  it("keeps typed edits when the product is refetched", async () => {
+    const { rerender } = renderForm();
+
+    const title = screen.getByLabelText("Title");
+    await userEvent.clear(title);
+    await userEvent.type(title, "Млеко 2л");
+
+    // A background refetch returns a fresh object for the same product.
+    product.current = { ...product.current, title: "Млеко 1л (server)" };
+    rerender(formTree());
+
+    expect(screen.getByLabelText("Title")).toHaveValue("Млеко 2л");
+  });
 });
 
 describe("AddOrEditProductForm price editing", () => {

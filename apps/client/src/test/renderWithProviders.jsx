@@ -4,9 +4,12 @@ import { MemoryRouter } from "react-router-dom";
 
 const theme = createTheme();
 
-export const renderWithProviders = (ui) =>
-  render(
-    <MemoryRouter>
-      <ThemeProvider theme={theme}>{ui}</ThemeProvider>
-    </MemoryRouter>,
-  );
+const Providers = ({ children }) => (
+  <MemoryRouter>
+    <ThemeProvider theme={theme}>{children}</ThemeProvider>
+  </MemoryRouter>
+);
+
+// Uses RTL's wrapper option so rerender() keeps the providers and updates the
+// same component instance instead of remounting it.
+export const renderWithProviders = (ui) => render(ui, { wrapper: Providers });

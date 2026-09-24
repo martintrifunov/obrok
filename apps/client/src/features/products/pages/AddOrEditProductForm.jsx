@@ -43,6 +43,7 @@ import {
   useUploadImage,
 } from "@/features/images/hooks/useImageQueries";
 import RichTextEditor from "@/components/ui/RichTextEditor";
+import useInitFromData from "@/hooks/useInitFromData";
 import MarketPricesTable from "@/features/products/components/MarketPricesTable";
 import { isManualPrice } from "@/features/products/utils/marketPrices";
 
@@ -81,16 +82,13 @@ const AddOrEditProductForm = () => {
     }
   }, [isFetchError, location, navigate]);
 
-  useEffect(() => {
-    if (fetchedProduct) {
-      setProduct({ ...fetchedProduct });
-
-      if (fetchedProduct.image) {
-        setSelectedImageId(fetchedProduct.image._id);
-        setSelectedImageTitle(fetchedProduct.image.title);
-      }
+  useInitFromData(fetchedProduct, (data) => {
+    setProduct({ ...data });
+    if (data.image) {
+      setSelectedImageId(data.image._id);
+      setSelectedImageTitle(data.image.title);
     }
-  }, [fetchedProduct]);
+  });
 
   const handleChange = (event) => {
     if (typeof event === "string" || event?.target === undefined) {

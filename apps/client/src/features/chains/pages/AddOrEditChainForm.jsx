@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Button,
   TextField,
@@ -28,6 +28,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import FileUploader from "@/components/ui/FileUploader";
 import GlobalLoadingProgress from "@/components/ui/GlobalLoadingProgress";
 import { BASE_URL } from "@/api/consts";
+import useInitFromData from "@/hooks/useInitFromData";
 import { useChain, useSaveChain } from "@/features/chains/hooks/useChainQueries";
 import {
   useImages,
@@ -55,15 +56,13 @@ const AddOrEditChainForm = () => {
   const saveMutation = useSaveChain(isEditMode, params.chainId);
   const uploadImageMutation = useUploadImage();
 
-  useEffect(() => {
-    if (fetchedChain) {
-      setChain(fetchedChain);
-      if (fetchedChain.image) {
-        setSelectedImageId(fetchedChain.image._id);
-        setSelectedImageTitle(fetchedChain.image.title);
-      }
+  useInitFromData(fetchedChain, (data) => {
+    setChain(data);
+    if (data.image) {
+      setSelectedImageId(data.image._id);
+      setSelectedImageTitle(data.image.title);
     }
-  }, [fetchedChain]);
+  });
 
   const handleChange = (event) => {
     const { name, value } = event.target;
