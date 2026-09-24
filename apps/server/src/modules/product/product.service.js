@@ -101,7 +101,15 @@ export class ProductService {
 
   async updateProduct(
     id,
-    { title, description, category, image, prices = [], removedMarkets = [] },
+    {
+      title,
+      description,
+      category,
+      image,
+      prices = [],
+      removedMarkets = [],
+      addedPrices = [],
+    },
   ) {
     const product = await this.productRepository.findById(id);
     if (!product) throw new NotFoundError(`No product matches ID ${id}.`);
@@ -122,6 +130,8 @@ export class ProductService {
       }
     }
 
+    if (addedPrices.length) await this.#validateAddedPrices(id, addedPrices, changedMarkets);
+
     if (title) product.title = title;
     if (description) product.description = description;
     if (category) product.category = category;
@@ -137,7 +147,30 @@ export class ProductService {
     const saved = await this.productRepository.save(product);
     await this.marketProductRepository.updateManualPrices(id, prices);
     await this.marketProductRepository.deleteManualByMarkets(id, removedMarkets);
+    await this.marketProductRepository.insertManualPrices(id, addedPrices);
     return saved;
+  }
+
+  async #validateAddedPrices(productId, addedPrices, changedMarkets) {
+    const added = addedPrices.map((p) => p.market.toString());
+    const changed = new Set(changedMarkets.map((m) => m.toString()));
+    if (added.some((m) => changed.has(m))) {
+      throw new ValidationError({
+        addedPrices: "A market can't be added and changed or removed in the same save.",
+      });
+    }
+
+    const markets = await Promise.all(added.map((m) => this.marketRepository.findById(m)));
+    if (markets.some((m) => !m)) {
+      throw new ValidationError({ addedPrices: "One of the selected markets no longer exists." });
+    }
+
+    const existing = await this.marketProductRepository.findByProductAndMarkets(productId, added);
+    if (existing.length) {
+      throw new ValidationError({
+        addedPrices: "This product already has a price at one of the selected markets.",
+      });
+    }
   }
 
   async deleteProduct(id) {

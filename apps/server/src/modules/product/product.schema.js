@@ -49,6 +49,19 @@ export const updateProductSchema = z.object({
     )
     .optional(),
   removedMarkets: z.array(zodObjectId).optional(),
+  // New hand-added prices at markets the product isn't sold at yet.
+  addedPrices: z
+    .array(
+      z.object({
+        market: zodObjectId,
+        price: z.number().positive("Price must be greater than 0."),
+      }),
+    )
+    .refine(
+      (entries) => new Set(entries.map((e) => e.market)).size === entries.length,
+      "Each market can only be added once.",
+    )
+    .optional(),
 });
 
 export const deleteProductSchema = z.object({

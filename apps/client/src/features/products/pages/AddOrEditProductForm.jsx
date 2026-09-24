@@ -64,6 +64,8 @@ const AddOrEditProductForm = () => {
   // Edit mode only: marketId -> edited price text, and markets whose price is being removed.
   const [priceEdits, setPriceEdits] = useState({});
   const [removedMarkets, setRemovedMarkets] = useState([]);
+  // Edit mode only: new hand-added prices at markets the product isn't sold at yet.
+  const [addedPrices, setAddedPrices] = useState([]);
 
   const { data: markets = [] } = useMarketsDropdown();
   const {
@@ -143,6 +145,19 @@ const AddOrEditProductForm = () => {
     );
   };
 
+  const handleAddPrice = (entry) => {
+    setErrors((prev) => ({
+      ...prev,
+      prices: undefined,
+      addedPrices: undefined,
+    }));
+    setAddedPrices((prev) => [...prev, entry]);
+  };
+
+  const handleRemoveAddedPrice = (marketId) => {
+    setAddedPrices((prev) => prev.filter((p) => p.market !== marketId));
+  };
+
   // Changed hand-added prices, or an error message if one is invalid.
   const collectPriceChanges = () => {
     const prices = [];
@@ -186,6 +201,7 @@ const AddOrEditProductForm = () => {
       if (error) return setErrors({ prices: error });
       if (prices.length) productData.prices = prices;
       if (removedMarkets.length) productData.removedMarkets = removedMarkets;
+      if (addedPrices.length) productData.addedPrices = addedPrices;
     } else {
       productData.price = product.price ? parseFloat(product.price) : null;
       if (selectedMarketId) productData.market = selectedMarketId;
@@ -260,7 +276,11 @@ const AddOrEditProductForm = () => {
                 removedMarkets={removedMarkets}
                 onPriceChange={handlePriceChange}
                 onToggleRemove={handleToggleRemove}
-                error={errors.prices}
+                markets={markets}
+                addedPrices={addedPrices}
+                onAddPrice={handleAddPrice}
+                onRemoveAddedPrice={handleRemoveAddedPrice}
+                error={errors.prices || errors.addedPrices}
               />
             ) : (
               <Box

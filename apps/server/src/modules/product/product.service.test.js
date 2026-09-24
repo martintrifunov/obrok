@@ -40,6 +40,8 @@ const mockMarketProductRepository = {
   findManualByProduct: vi.fn().mockResolvedValue([]),
   updateManualPrices: vi.fn(),
   deleteManualByMarkets: vi.fn(),
+  findByProductAndMarkets: vi.fn().mockResolvedValue([]),
+  insertManualPrices: vi.fn(),
 };
 
 const mockProductEmbeddingRepository = {
@@ -237,6 +239,65 @@ describe("ProductService", () => {
         { market: "m1", price: 99 },
       ]);
       expect(mockMarketProductRepository.deleteManualByMarkets).toHaveBeenCalledWith("p1", ["m2"]);
+    });
+
+    describe("addedPrices", () => {
+      const product = () => ({ _id: "p1", title: "Old" });
+
+      it("inserts hand-added prices at new markets", async () => {
+        const p = product();
+        mockProductRepository.findById.mockResolvedValue(p);
+        mockProductRepository.save.mockResolvedValue(p);
+        mockMarketRepository.findById.mockResolvedValue({ _id: "m9" });
+        mockMarketProductRepository.findByProductAndMarkets.mockResolvedValue([]);
+        const sut = makeSut();
+
+        await sut.updateProduct("p1", { addedPrices: [{ market: "m9", price: 50 }] });
+
+        expect(mockMarketProductRepository.findByProductAndMarkets).toHaveBeenCalledWith("p1", ["m9"]);
+        expect(mockMarketProductRepository.insertManualPrices).toHaveBeenCalledWith("p1", [
+          { market: "m9", price: 50 },
+        ]);
+      });
+
+      it("rejects a market the product already has a price at, saving nothing", async () => {
+        const p = product();
+        mockProductRepository.findById.mockResolvedValue(p);
+        mockMarketRepository.findById.mockResolvedValue({ _id: "m9" });
+        mockMarketProductRepository.findByProductAndMarkets.mockResolvedValue([{ market: "m9" }]);
+        const sut = makeSut();
+
+        await expect(
+          sut.updateProduct("p1", { title: "New", addedPrices: [{ market: "m9", price: 50 }] }),
+        ).rejects.toThrow(ValidationError);
+        expect(mockProductRepository.save).not.toHaveBeenCalled();
+        expect(mockMarketProductRepository.insertManualPrices).not.toHaveBeenCalled();
+      });
+
+      it("rejects a market that no longer exists", async () => {
+        mockProductRepository.findById.mockResolvedValue(product());
+        mockMarketRepository.findById.mockResolvedValue(null);
+        const sut = makeSut();
+
+        await expect(
+          sut.updateProduct("p1", { addedPrices: [{ market: "gone", price: 50 }] }),
+        ).rejects.toThrow(ValidationError);
+        expect(mockMarketProductRepository.insertManualPrices).not.toHaveBeenCalled();
+      });
+
+      it("rejects adding a market that is also being changed or removed", async () => {
+        mockProductRepository.findById.mockResolvedValue(product());
+        mockMarketProductRepository.findManualByProduct.mockResolvedValue([{ market: "m1" }]);
+        const sut = makeSut();
+
+        await expect(
+          sut.updateProduct("p1", {
+            removedMarkets: ["m1"],
+            addedPrices: [{ market: "m1", price: 50 }],
+          }),
+        ).rejects.toThrow(ValidationError);
+        expect(mockProductRepository.save).not.toHaveBeenCalled();
+      });
     });
 
     it("rejects changes to scraped prices without saving anything", async () => {

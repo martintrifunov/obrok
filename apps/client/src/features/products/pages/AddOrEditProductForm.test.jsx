@@ -14,7 +14,7 @@ vi.mock("@/features/products/hooks/useProductQueries", () => ({
   useSaveProduct: () => ({ mutate, isPending: false }),
 }));
 vi.mock("@/features/markets/hooks/useMarketQueries", () => ({
-  useMarketsDropdown: () => ({ data: [] }),
+  useMarketsDropdown: () => ({ data: dropdownMarkets }),
 }));
 vi.mock("@/features/images/hooks/useImageQueries", () => ({
   useImages: () => ({ data: [], refetch: vi.fn() }),
@@ -25,8 +25,11 @@ vi.mock("@/components/ui/RichTextEditor", () => ({
 }));
 
 const vero = { _id: "m-vero", name: "Vero 1", chain: { name: "Vero" } };
+const ramstore = { _id: "m-ram", name: "Ramstore 2", chain: { name: "Ramstore" } };
 const manualA = { _id: "m-a", name: "Pazar", chain: { name: "Local" } };
 const manualB = { _id: "m-b", name: "Kiosk", chain: { name: "Local" } };
+// Markets offered in the "Add price" select: the product's own markets plus one new.
+const dropdownMarkets = [vero, manualA, manualB, ramstore];
 
 const theme = createTheme();
 const formTree = () => (
@@ -136,5 +139,60 @@ describe("AddOrEditProductForm price editing", () => {
 
     expect(mutate).not.toHaveBeenCalled();
     expect(screen.getByText("Prices must be greater than 0.")).toBeInTheDocument();
+  });
+
+  describe("adding a price at a new market", () => {
+    const openMarketSelect = () =>
+      fireEvent.mouseDown(screen.getByRole("combobox", { name: "Market" }));
+
+    it("only offers markets the product isn't sold at", () => {
+      renderForm();
+      openMarketSelect();
+
+      const options = screen.getAllByRole("option").map((o) => o.textContent);
+      expect(options).toEqual(["Ramstore 2 (Ramstore)"]);
+    });
+
+    it("stages a new price and sends it as addedPrices", async () => {
+      renderForm();
+      openMarketSelect();
+      await userEvent.click(screen.getByRole("option", { name: "Ramstore 2 (Ramstore)" }));
+      await userEvent.type(screen.getByLabelText("New price"), "55");
+      await userEvent.click(screen.getByRole("button", { name: /add price/i }));
+
+      expect(screen.getByText("55 ден")).toBeInTheDocument();
+      save();
+
+      expect(sentData().addedPrices).toEqual([{ market: "m-ram", price: 55 }]);
+    });
+
+    it("doesn't stage without a market or a positive price", async () => {
+      renderForm();
+      await userEvent.type(screen.getByLabelText("New price"), "55");
+      await userEvent.click(screen.getByRole("button", { name: /add price/i }));
+      expect(screen.getByText("Choose a market.")).toBeInTheDocument();
+
+      openMarketSelect();
+      await userEvent.click(screen.getByRole("option", { name: "Ramstore 2 (Ramstore)" }));
+      await userEvent.clear(screen.getByLabelText("New price"));
+      await userEvent.type(screen.getByLabelText("New price"), "0");
+      await userEvent.click(screen.getByRole("button", { name: /add price/i }));
+      expect(screen.getByText("Price must be greater than 0.")).toBeInTheDocument();
+
+      save();
+      expect(sentData()).not.toHaveProperty("addedPrices");
+    });
+
+    it("sends nothing when a staged price is removed before saving", async () => {
+      renderForm();
+      openMarketSelect();
+      await userEvent.click(screen.getByRole("option", { name: "Ramstore 2 (Ramstore)" }));
+      await userEvent.type(screen.getByLabelText("New price"), "55");
+      await userEvent.click(screen.getByRole("button", { name: /add price/i }));
+      await userEvent.click(screen.getByLabelText("Remove new price at Ramstore 2 (Ramstore)"));
+      save();
+
+      expect(sentData()).not.toHaveProperty("addedPrices");
+    });
   });
 });

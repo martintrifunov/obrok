@@ -58,7 +58,7 @@ Unique compound index on `(market, product)` — one price per product per marke
 
 A row with `lastSeenAt: null` was added by an admin. Anything else belongs to the scraper, which overwrites its price and deletes it when the store stops listing the product (see the scraper module's stale price cleanup).
 
-`PUT /products` accepts `prices: [{ market, price }]` and `removedMarkets: [marketId]` for hand-added rows only. If any listed market is scraper-owned, the request is rejected with a 400 on `prices` and nothing is saved. If the scraper later starts listing a hand-added product, it stamps the row and takes it over.
+`PUT /products` accepts `prices: [{ market, price }]` and `removedMarkets: [marketId]` for hand-added rows only, and `addedPrices: [{ market, price }]` to add a hand-added price at a market the product isn't sold at yet (rejected if the market doesn't exist, already has a row for the product, or also appears in `prices`/`removedMarkets`). If any listed market is scraper-owned, the request is rejected with a 400 on `prices` and nothing is saved. If the scraper later starts listing a hand-added product, it stamps the row and takes it over.
 
 ### Many-to-Many Relationship
 

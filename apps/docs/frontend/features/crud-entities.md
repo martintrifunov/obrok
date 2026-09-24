@@ -52,7 +52,7 @@ Mutations invalidate related query keys (e.g., deleting a chain invalidates mark
 
 - Rich text editor for descriptions.
 - Multi-market pricing (price range display in the list).
-- Edit form shows a per-market price table: hand-added prices are editable and removable, scraped prices are read-only ("Updated by scraper").
+- Edit form shows a per-market price table: hand-added prices are editable and removable, scraped prices are read-only ("Updated by scraper"). An "Add price" row stages a new hand-added price at a market the product isn't sold at yet; staged rows can be removed before saving.
 - Category filtering.
 - Image upload with preview.
 

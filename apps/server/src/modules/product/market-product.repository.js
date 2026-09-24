@@ -145,6 +145,26 @@ export class MarketProductRepository {
     );
   }
 
+  /** Any row (scraped or hand-added) of this product at the given markets. */
+  async findByProductAndMarkets(productId, marketIds) {
+    return MarketProductModel.find({
+      product: productId,
+      market: { $in: marketIds },
+    }).exec();
+  }
+
+  async insertManualPrices(productId, entries) {
+    if (!entries.length) return null;
+    return MarketProductModel.insertMany(
+      entries.map(({ market, price }) => ({
+        market,
+        product: productId,
+        price,
+        lastSeenAt: null,
+      })),
+    );
+  }
+
   async deleteManualByMarkets(productId, marketIds) {
     if (!marketIds.length) return null;
     return MarketProductModel.deleteMany({
