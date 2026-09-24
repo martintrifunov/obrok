@@ -20,6 +20,9 @@ RUN npm ci --omit=dev
 
 COPY --chown=node:node . .
 
+# Mount point for the reports volume; must be owned by node so the volume inherits it.
+RUN mkdir -p src/data/reports && chown node:node src/data/reports
+
 EXPOSE 5000
 
 USER node
