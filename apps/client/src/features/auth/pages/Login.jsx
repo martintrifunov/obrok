@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import { fetchPublic } from "@/api/fetch";
+import { queryClient } from "@/api/queryClient";
 import { useLocation, useNavigate } from "react-router-dom";
 import useAuth from "@/features/auth/hooks/useAuth";
 
@@ -38,6 +39,8 @@ const Login = () => {
 
       const accessToken = data?.accessToken;
 
+      // A previous session may have expired without logging out; don't show its cached data.
+      queryClient.clear();
       setAuth({ username, accessToken });
       setUsername("");
       setPassword("");

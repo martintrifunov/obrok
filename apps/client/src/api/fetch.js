@@ -45,6 +45,15 @@ async function refreshAccessToken() {
       setAuth((prev) => ({ ...prev, accessToken: data.accessToken }));
       return data.accessToken;
     })
+    .catch((err) => {
+      // The session is gone server-side; don't leave a dead token making the app look logged in.
+      // Network errors (no status) keep the session so a flaky connection doesn't log the user out.
+      // The query cache is cleared on the next login rather than here, so in-flight queries don't refetch into a loop.
+      if (err?.status === 401 || err?.status === 403) {
+        useAuthStore.getState().setAuth({});
+      }
+      throw err;
+    })
     .finally(() => {
       refreshPromise = null;
     });
