@@ -39,6 +39,7 @@ Virtual: `markets` — populated via Market.chain back-reference.
 Deleting a chain removes:
 1. All associated **Markets** linked to the chain.
 2. All **MarketProduct** junction records for those markets.
+3. The chain's **Image**, if no other chain or product uses it and it isn't a seeded `chain-<key>` placeholder.
 
 ```mermaid
 flowchart TD
@@ -46,6 +47,7 @@ flowchart TD
     B --> C[Delete MarketProducts for each market]
     C --> D[Delete Markets]
     D --> E[Delete Chain document]
+    E --> F[Delete image if unused]
 ```
 
 ## Source Anchors

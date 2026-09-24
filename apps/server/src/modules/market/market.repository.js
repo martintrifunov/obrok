@@ -66,12 +66,19 @@ export class MarketRepository {
       }
     }
 
+    // No cap: reports cover every matching market (hundreds), so only the fields
+    // the CSV needs are loaded. The chain image feeds the chain report's image column.
     return MarketModel.find(query)
-      .limit(500)
-      .populate({ path: "chain", select: "name" })
+      .select("name location chain")
+      .populate({
+        path: "chain",
+        select: "name image",
+        populate: { path: "image", select: "filename" },
+      })
       .populate({
         path: "marketProducts",
-        populate: { path: "product" },
+        select: "market product price",
+        populate: { path: "product", select: "title" },
       })
       .lean()
       .exec();
