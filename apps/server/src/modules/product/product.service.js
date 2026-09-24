@@ -9,12 +9,14 @@ export class ProductService {
     imageRepository,
     marketProductRepository,
     productEmbeddingRepository,
+    imageService = null,
   ) {
     this.productRepository = productRepository;
     this.marketRepository = marketRepository;
     this.imageRepository = imageRepository;
     this.marketProductRepository = marketProductRepository;
     this.productEmbeddingRepository = productEmbeddingRepository;
+    this.imageService = imageService;
   }
 
   async getAllProducts({
@@ -145,6 +147,7 @@ export class ProductService {
     await this.marketProductRepository.deleteByProduct(id);
     await this.productEmbeddingRepository.deleteByProduct(id);
     await this.productRepository.delete(product);
+    await this.imageService?.deleteIfUnused(product.image?._id ?? product.image);
   }
 
   async getCategories(marketId) {

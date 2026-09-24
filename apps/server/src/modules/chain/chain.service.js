@@ -8,11 +8,13 @@ export class ChainService {
     imageRepository,
     marketRepository,
     marketProductRepository,
+    imageService = null,
   ) {
     this.chainRepository = chainRepository;
     this.imageRepository = imageRepository;
     this.marketRepository = marketRepository;
     this.marketProductRepository = marketProductRepository;
+    this.imageService = imageService;
   }
 
   async getAllChains({ page, limit, name }) {
@@ -67,6 +69,7 @@ export class ChainService {
       await this.marketRepository.delete(market);
     }
     await this.chainRepository.delete(chain);
+    await this.imageService?.deleteIfUnused(chain.image?._id ?? chain.image);
   }
 
   async generateReport() {

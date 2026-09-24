@@ -46,6 +46,10 @@ const mockProductEmbeddingRepository = {
   deleteByProduct: vi.fn(),
 };
 
+const mockImageService = {
+  deleteIfUnused: vi.fn(),
+};
+
 const makeSut = () =>
   new ProductService(
     mockProductRepository,
@@ -53,6 +57,7 @@ const makeSut = () =>
     mockImageRepository,
     mockMarketProductRepository,
     mockProductEmbeddingRepository,
+    mockImageService,
   );
 
 beforeEach(() => vi.clearAllMocks());
@@ -299,6 +304,15 @@ describe("ProductService", () => {
       expect(mockMarketProductRepository.deleteByProduct).toHaveBeenCalledWith("p1");
       expect(mockProductEmbeddingRepository.deleteByProduct).toHaveBeenCalledWith("p1");
       expect(mockProductRepository.delete).toHaveBeenCalledWith(product);
+    });
+
+    it("cleans up the product's image after deleting it", async () => {
+      mockProductRepository.findById.mockResolvedValue({ _id: "p1", image: { _id: "img1" } });
+      const sut = makeSut();
+
+      await sut.deleteProduct("p1");
+
+      expect(mockImageService.deleteIfUnused).toHaveBeenCalledWith("img1");
     });
   });
 });

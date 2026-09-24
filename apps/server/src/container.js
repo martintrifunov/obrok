@@ -60,6 +60,7 @@ const chainService = new ChainService(
   imageRepository,
   marketRepository,
   marketProductRepository,
+  imageService,
 );
 
 const productService = new ProductService(
@@ -68,6 +69,7 @@ const productService = new ProductService(
   imageRepository,
   marketProductRepository,
   productEmbeddingRepository,
+  imageService,
 );
 
 const marketService = new MarketService(

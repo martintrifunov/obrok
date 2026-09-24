@@ -47,6 +47,12 @@ size    : Number
 3. URL is computed from the configured base URL + filename.
 4. On error, filesystem cleanup removes the uploaded file.
 
+### Deletion Rules
+
+- `DELETE /images` returns **409** while any chain or product still uses the image; the message says how many of each.
+- Deleting a chain or product also deletes its image (file and record) when nothing else uses it.
+- Seeded placeholders titled `chain-<key>` (from `seed-chain-images.js`) are never deleted this way, since the scraper reuses them for chains it creates.
+
 ### File Serving
 
 Uploaded files are served via the `/uploads/` route, which proxies to the API container in production.

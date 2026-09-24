@@ -38,12 +38,17 @@ const mockMarketProductRepository = {
   deleteByMarket: vi.fn(),
 };
 
+const mockImageService = {
+  deleteIfUnused: vi.fn(),
+};
+
 const makeSut = () =>
   new ChainService(
     mockChainRepository,
     mockImageRepository,
     mockMarketRepository,
     mockMarketProductRepository,
+    mockImageService,
   );
 
 beforeEach(() => vi.clearAllMocks());
@@ -175,6 +180,39 @@ describe("ChainService", () => {
       expect(mockMarketProductRepository.deleteByMarket).toHaveBeenCalledTimes(2);
       expect(mockMarketRepository.delete).toHaveBeenCalledTimes(2);
       expect(mockChainRepository.delete).toHaveBeenCalledWith(chain);
+    });
+
+    it("cleans up the chain's image after deleting it", async () => {
+      mockChainRepository.findById.mockResolvedValue({ _id: "v1", image: { _id: "img1" } });
+      mockMarketRepository.findByChain.mockResolvedValue([]);
+      const sut = makeSut();
+
+      await sut.deleteChain("v1");
+
+      expect(mockImageService.deleteIfUnused).toHaveBeenCalledWith("img1");
+      expect(mockChainRepository.delete.mock.invocationCallOrder[0]).toBeLessThan(
+        mockImageService.deleteIfUnused.mock.invocationCallOrder[0],
+      );
+    });
+  });
+
+  describe("generateReport image column", () => {
+    it("links the chain image in each row", async () => {
+      process.env.SERVER_ORIGIN = "https://obrok.net";
+      mockMarketRepository.findAllForReport.mockResolvedValue([
+        {
+          name: "Vero 1",
+          location: [42, 21.4],
+          chain: { name: "Vero", image: { filename: "123-vero.png" } },
+          marketProducts: [{ product: { title: "Млеко" }, price: 65 }],
+        },
+      ]);
+      const sut = makeSut();
+
+      const csv = await sut.generateReport();
+
+      expect(csv).toContain('"https://obrok.net/uploads/123-vero.png"');
+      expect(csv).toContain("Млеко, 65 ден");
     });
   });
 });
