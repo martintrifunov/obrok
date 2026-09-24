@@ -22,6 +22,14 @@ jobs:
         working-directory: ./apps/server
         run: npm ci
 
+      - name: Lint server
+        working-directory: ./apps/server
+        run: npm run lint
+
+      - name: Typecheck server
+        working-directory: ./apps/server
+        run: npm run typecheck
+
       - name: Run server tests
         working-directory: ./apps/server
         run: npm test
@@ -33,6 +41,10 @@ jobs:
       - name: Lint client
         working-directory: ./apps/client
         run: npm run lint
+
+      - name: Run client tests
+        working-directory: ./apps/client
+        run: npm test
 
   deploy:
     name: Deploy to Production
