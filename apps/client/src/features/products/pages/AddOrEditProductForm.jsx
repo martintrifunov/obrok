@@ -162,6 +162,8 @@ const AddOrEditProductForm = () => {
     }
 
     if (selectedImageId) productData.image = selectedImageId;
+    // An omitted image means "keep it" on the server, so removal must be sent explicitly.
+    else if (isEditMode && fetchedProduct?.image) productData.image = null;
 
     saveMutation.mutate(productData, {
       onSuccess: () => navigate("/dashboard/products"),

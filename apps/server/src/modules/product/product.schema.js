@@ -37,7 +37,8 @@ export const updateProductSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
   category: z.string().min(1).optional(),
-  image: zodObjectId.optional(),
+  // null clears the image; omitted leaves it unchanged.
+  image: zodObjectId.nullable().optional(),
 });
 
 export const deleteProductSchema = z.object({

@@ -208,6 +208,25 @@ describe("ProductService", () => {
       expect(mockProductRepository.save).toHaveBeenCalledWith(product);
     });
 
+    it("clears the image when image is null", async () => {
+      const product = { _id: "p1", title: "Old", image: "img1" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockProductRepository.save.mockResolvedValue(product);
+      const sut = makeSut();
+      await sut.updateProduct("p1", { image: null });
+      expect(product.image).toBeNull();
+      expect(mockImageRepository.findById).not.toHaveBeenCalled();
+    });
+
+    it("keeps the image when image is omitted", async () => {
+      const product = { _id: "p1", title: "Old", image: "img1" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockProductRepository.save.mockResolvedValue(product);
+      const sut = makeSut();
+      await sut.updateProduct("p1", { title: "New" });
+      expect(product.image).toBe("img1");
+    });
+
     it("throws NotFoundError if new image does not exist", async () => {
       const product = { _id: "p1", title: "Old" };
       mockProductRepository.findById.mockResolvedValue(product);

@@ -104,7 +104,9 @@ export class ProductService {
     if (description) product.description = description;
     if (category) product.category = category;
 
-    if (image) {
+    if (image === null) {
+      product.image = null;
+    } else if (image) {
       const imageExists = await this.imageRepository.findById(image);
       if (!imageExists) throw new NotFoundError("Selected image not found.");
       product.image = image;
