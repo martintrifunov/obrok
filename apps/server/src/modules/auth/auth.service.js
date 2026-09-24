@@ -1,10 +1,42 @@
 import bcrypt from "bcrypt";
 import { UnauthorizedError } from "../../shared/errors/UnauthorizedError.js";
 
+// Concurrent refreshes (two tabs, or PersistLogin racing a 401 retry) send the
+// same cookie. The loser must not be treated as token reuse, so a rotated token
+// stays redeemable for its successor briefly. In-memory is fine: the API runs
+// as a single process.
+const ROTATION_GRACE_MS = 15_000;
+
 export class AuthService {
-  constructor(authRepository, tokenService) {
+  constructor(authRepository, tokenService, { now = () => Date.now() } = {}) {
     this.authRepository = authRepository;
     this.tokenService = tokenService;
+    this.now = now;
+    this.recentRotations = new Map();
+  }
+
+  #rememberRotation(oldToken, newToken) {
+    const now = this.now();
+    for (const [token, entry] of this.recentRotations) {
+      if (entry.expiresAt <= now) this.recentRotations.delete(token);
+    }
+    this.recentRotations.set(oldToken, {
+      newToken,
+      expiresAt: now + ROTATION_GRACE_MS,
+    });
+  }
+
+  async #redeemRecentRotation(oldToken) {
+    const entry = this.recentRotations.get(oldToken);
+    if (!entry || entry.expiresAt <= this.now()) return null;
+
+    const user = await this.authRepository.findByRefreshToken(entry.newToken);
+    if (!user) return null;
+
+    return {
+      accessToken: this.tokenService.generateAccessToken(user.username, user.role),
+      newRefreshToken: entry.newToken,
+    };
   }
 
   async login(username, password, existingRefreshToken) {
@@ -56,8 +88,11 @@ export class AuthService {
     const user =
       await this.authRepository.findByRefreshToken(existingRefreshToken);
 
-    // Refresh token reuse detected
     if (!user) {
+      const graced = await this.#redeemRecentRotation(existingRefreshToken);
+      if (graced) return graced;
+
+      // Refresh token reuse detected
       try {
         const decoded =
           await this.tokenService.verifyRefreshToken(existingRefreshToken);
@@ -101,8 +136,14 @@ export class AuthService {
         existingRefreshToken,
         newRefreshToken,
       );
-      if (!updated) throw new UnauthorizedError();
+      if (!updated) {
+        // Lost the race to a concurrent refresh of the same token.
+        const graced = await this.#redeemRecentRotation(existingRefreshToken);
+        if (graced) return graced;
+        throw new UnauthorizedError();
+      }
 
+      this.#rememberRotation(existingRefreshToken, newRefreshToken);
       return { accessToken, newRefreshToken };
     } catch (err) {
       // Token expired or tampered — remove old token atomically and reject

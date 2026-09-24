@@ -144,5 +144,70 @@ describe("AuthService", () => {
         "refresh-token",
       );
     });
+
+    describe("concurrent refresh of the same token", () => {
+      const user = { _id: "u1", username: "maco", role: "admin", refreshToken: ["token-abc"] };
+
+      const rotateOnce = async (sut) => {
+        mockAuthRepository.findByRefreshToken.mockResolvedValueOnce(user);
+        mockTokenService.verifyRefreshToken.mockResolvedValue({ username: "maco" });
+        mockAuthRepository.rotateRefreshToken.mockResolvedValueOnce(user);
+        return sut.refresh("token-abc");
+      };
+
+      it("gives the late request the already-rotated token instead of wiping sessions", async () => {
+        const sut = makeSut();
+        await rotateOnce(sut);
+
+        // The old token is gone from the DB; its successor is present.
+        mockAuthRepository.findByRefreshToken.mockImplementation(async (token) =>
+          token === "refresh-token" ? user : null,
+        );
+        const result = await sut.refresh("token-abc");
+
+        expect(result).toEqual({
+          accessToken: "access-token",
+          newRefreshToken: "refresh-token",
+        });
+        expect(mockAuthRepository.clearRefreshTokens).not.toHaveBeenCalled();
+      });
+
+      it("recovers when both requests found the user but lost the atomic swap", async () => {
+        const sut = makeSut();
+        await rotateOnce(sut);
+
+        mockAuthRepository.findByRefreshToken.mockImplementation(async (token) =>
+          token === "token-abc" || token === "refresh-token" ? user : null,
+        );
+        mockAuthRepository.rotateRefreshToken.mockResolvedValueOnce(null);
+        const result = await sut.refresh("token-abc");
+
+        expect(result.newRefreshToken).toBe("refresh-token");
+        expect(mockAuthRepository.clearRefreshTokens).not.toHaveBeenCalled();
+      });
+
+      it("still treats reuse after the grace window as theft", async () => {
+        let now = 1_000_000;
+        const sut = new AuthService(mockAuthRepository, mockTokenService, {
+          now: () => now,
+        });
+        await rotateOnce(sut);
+
+        now += 16_000;
+        mockAuthRepository.findByRefreshToken.mockResolvedValue(null);
+        mockAuthRepository.findByUsername.mockResolvedValue(user);
+        await expect(sut.refresh("token-abc")).rejects.toThrow(UnauthorizedError);
+        expect(mockAuthRepository.clearRefreshTokens).toHaveBeenCalledWith("u1");
+      });
+
+      it("does not redeem a successor that was itself revoked", async () => {
+        const sut = makeSut();
+        await rotateOnce(sut);
+
+        mockAuthRepository.findByRefreshToken.mockResolvedValue(null);
+        mockAuthRepository.findByUsername.mockResolvedValue(user);
+        await expect(sut.refresh("token-abc")).rejects.toThrow(UnauthorizedError);
+      });
+    });
   });
 });
