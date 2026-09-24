@@ -45,7 +45,8 @@ export class ScraperService {
     this.legacyPriceRowsBackfilled = false;
   }
 
-  async #backfillLegacyPriceRows() {
+  /** Idempotent; runs at startup and before the first scrape in standalone scripts. */
+  async backfillLegacyPriceRows() {
     if (this.legacyPriceRowsBackfilled) return;
 
     const [scrapedMarketIds, adminProductIds] = await Promise.all([
@@ -87,7 +88,7 @@ export class ScraperService {
 
   async runForMarket(scraper) {
     const startTime = performance.now();
-    await this.#backfillLegacyPriceRows();
+    await this.backfillLegacyPriceRows();
     console.log(`\n[ScraperService] 🚀 Starting ${scraper.constructor.name}`);
     console.log(
       `[ScraperService] Settings: concurrency=${CONCURRENT_TABS}, navTimeout=${NAV_TIMEOUT_MS}ms, protocolTimeout=${PROTOCOL_TIMEOUT_MS}ms`,

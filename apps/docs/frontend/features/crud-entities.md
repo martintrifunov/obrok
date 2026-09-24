@@ -51,7 +51,8 @@ Mutations invalidate related query keys (e.g., deleting a chain invalidates mark
 ### Products
 
 - Rich text editor for descriptions.
-- Multi-market pricing (price range display).
+- Multi-market pricing (price range display in the list).
+- Edit form shows a per-market price table: hand-added prices are editable and removable, scraped prices are read-only ("Updated by scraper").
 - Category filtering.
 - Image upload with preview.
 

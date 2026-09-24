@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ProductService } from "./product.service.js";
 import { NotFoundError } from "../../shared/errors/NotFoundError.js";
+import { ValidationError } from "../../shared/errors/ValidationError.js";
 
 vi.mock("mongoose", async () => {
   const actual = await vi.importActual("mongoose");
@@ -36,6 +37,9 @@ const mockMarketProductRepository = {
   findByMarket: vi.fn(),
   create: vi.fn(),
   deleteByProduct: vi.fn(),
+  findManualByProduct: vi.fn().mockResolvedValue([]),
+  updateManualPrices: vi.fn(),
+  deleteManualByMarkets: vi.fn(),
 };
 
 const mockProductEmbeddingRepository = {
@@ -206,6 +210,45 @@ describe("ProductService", () => {
       await sut.updateProduct("p1", { title: "New" });
       expect(product.title).toBe("New");
       expect(mockProductRepository.save).toHaveBeenCalledWith(product);
+    });
+
+    it("updates and removes hand-added prices", async () => {
+      const product = { _id: "p1", title: "Old" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockProductRepository.save.mockResolvedValue(product);
+      mockMarketProductRepository.findManualByProduct.mockResolvedValue([
+        { market: "m1" },
+        { market: "m2" },
+      ]);
+      const sut = makeSut();
+
+      await sut.updateProduct("p1", {
+        prices: [{ market: "m1", price: 99 }],
+        removedMarkets: ["m2"],
+      });
+
+      expect(mockMarketProductRepository.findManualByProduct).toHaveBeenCalledWith("p1", ["m1", "m2"]);
+      expect(mockMarketProductRepository.updateManualPrices).toHaveBeenCalledWith("p1", [
+        { market: "m1", price: 99 },
+      ]);
+      expect(mockMarketProductRepository.deleteManualByMarkets).toHaveBeenCalledWith("p1", ["m2"]);
+    });
+
+    it("rejects changes to scraped prices without saving anything", async () => {
+      const product = { _id: "p1", title: "Old" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockMarketProductRepository.findManualByProduct.mockResolvedValue([{ market: "m1" }]);
+      const sut = makeSut();
+
+      await expect(
+        sut.updateProduct("p1", {
+          title: "New",
+          prices: [{ market: "m1", price: 99 }, { market: "scraped", price: 1 }],
+        }),
+      ).rejects.toThrow(ValidationError);
+      expect(mockProductRepository.save).not.toHaveBeenCalled();
+      expect(mockMarketProductRepository.updateManualPrices).not.toHaveBeenCalled();
+      expect(product.title).toBe("Old");
     });
 
     it("clears the image when image is null", async () => {

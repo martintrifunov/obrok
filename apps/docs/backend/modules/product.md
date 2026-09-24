@@ -31,7 +31,7 @@ Product catalog with multi-market pricing via a junction table. Supports categor
 | `GET` | `/products/categories` | Public | Category list (optionally scoped to market) |
 | `GET` | `/products/:id` | Public | Product detail |
 | `POST` | `/products` | JWT | Create product |
-| `PUT` | `/products/:id` | JWT | Update product |
+| `PUT` | `/products/:id` | JWT | Update product, including hand-added prices (`prices`, `removedMarkets`) |
 | `DELETE` | `/products/:id` | JWT | Delete product |
 
 ### Data Models
@@ -48,10 +48,17 @@ image      : ObjectId → Image (optional)
 ```
 market  : ObjectId → Market (required)
 product : ObjectId → Product (required)
-price   : Number (required)
+price      : Number (required)
+lastSeenAt : Date (null for hand-added rows; set by the scraper on every run that sees the row)
 ```
 
 Unique compound index on `(market, product)` — one price per product per market.
+
+### Price Ownership
+
+A row with `lastSeenAt: null` was added by an admin. Anything else belongs to the scraper, which overwrites its price and deletes it when the store stops listing the product (see the scraper module's stale price cleanup).
+
+`PUT /products` accepts `prices: [{ market, price }]` and `removedMarkets: [marketId]` for hand-added rows only. If any listed market is scraper-owned, the request is rejected with a 400 on `prices` and nothing is saved. If the scraper later starts listing a hand-added product, it stamps the row and takes it over.
 
 ### Many-to-Many Relationship
 

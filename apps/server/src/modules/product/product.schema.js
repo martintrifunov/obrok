@@ -39,6 +39,16 @@ export const updateProductSchema = z.object({
   category: z.string().min(1).optional(),
   // null clears the image; omitted leaves it unchanged.
   image: zodObjectId.nullable().optional(),
+  // Only hand-added prices (not scraped ones) can be changed or removed.
+  prices: z
+    .array(
+      z.object({
+        market: zodObjectId,
+        price: z.number().positive("Price must be greater than 0."),
+      }),
+    )
+    .optional(),
+  removedMarkets: z.array(zodObjectId).optional(),
 });
 
 export const deleteProductSchema = z.object({

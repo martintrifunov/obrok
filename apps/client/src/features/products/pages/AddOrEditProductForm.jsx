@@ -43,6 +43,8 @@ import {
   useUploadImage,
 } from "@/features/images/hooks/useImageQueries";
 import RichTextEditor from "@/components/ui/RichTextEditor";
+import MarketPricesTable from "@/features/products/components/MarketPricesTable";
+import { isManualPrice } from "@/features/products/utils/marketPrices";
 
 const AddOrEditProductForm = () => {
   const theme = useTheme();
@@ -58,7 +60,9 @@ const AddOrEditProductForm = () => {
   const [selectedImageId, setSelectedImageId] = useState("");
   const [selectedImageTitle, setSelectedImageTitle] = useState("");
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
-  const [hasMultipleMarkets, setHasMultipleMarkets] = useState(false);
+  // Edit mode only: marketId -> edited price text, and markets whose price is being removed.
+  const [priceEdits, setPriceEdits] = useState({});
+  const [removedMarkets, setRemovedMarkets] = useState([]);
 
   const { data: markets = [] } = useMarketsDropdown();
   const {
@@ -79,18 +83,7 @@ const AddOrEditProductForm = () => {
 
   useEffect(() => {
     if (fetchedProduct) {
-      const mps = fetchedProduct.marketProducts || [];
-      setHasMultipleMarkets(mps.length > 1);
-
-      const mp = mps[0];
-      setProduct({
-        ...fetchedProduct,
-        ...(mp?.price !== undefined && { price: mp.price }),
-      });
-
-      if (mp?.market) {
-        setSelectedMarketId(mp.market._id || mp.market);
-      }
+      setProduct({ ...fetchedProduct });
 
       if (fetchedProduct.image) {
         setSelectedImageId(fetchedProduct.image._id);
@@ -138,6 +131,40 @@ const AddOrEditProductForm = () => {
     setSelectedImageTitle("");
   };
 
+  const handlePriceChange = (marketId, value) => {
+    setErrors((prev) => ({ ...prev, prices: undefined }));
+    setPriceEdits((prev) => ({ ...prev, [marketId]: value }));
+  };
+
+  const handleToggleRemove = (marketId) => {
+    setErrors((prev) => ({ ...prev, prices: undefined }));
+    setRemovedMarkets((prev) =>
+      prev.includes(marketId)
+        ? prev.filter((id) => id !== marketId)
+        : [...prev, marketId],
+    );
+  };
+
+  // Changed hand-added prices, or an error message if one is invalid.
+  const collectPriceChanges = () => {
+    const prices = [];
+    for (const mp of fetchedProduct?.marketProducts || []) {
+      const marketId = mp.market?._id || mp.market;
+      const edited = priceEdits[marketId];
+      if (
+        !isManualPrice(mp) ||
+        edited === undefined ||
+        removedMarkets.includes(marketId)
+      ) {
+        continue;
+      }
+      const price = parseFloat(edited);
+      if (!(price > 0)) return { error: "Prices must be greater than 0." };
+      if (price !== mp.price) prices.push({ market: marketId, price });
+    }
+    return { prices };
+  };
+
   const handleSelectImage = (image) => {
     setSelectedImageId(image._id);
     setSelectedImageTitle(image.title);
@@ -155,10 +182,15 @@ const AddOrEditProductForm = () => {
     productData.title = product.title;
     productData.category = product.category;
     productData.description = product.description;
-    productData.price = product.price ? parseFloat(product.price) : null;
 
-    if (!isEditMode && selectedMarketId) {
-      productData.market = selectedMarketId;
+    if (isEditMode) {
+      const { prices, error } = collectPriceChanges();
+      if (error) return setErrors({ prices: error });
+      if (prices.length) productData.prices = prices;
+      if (removedMarkets.length) productData.removedMarkets = removedMarkets;
+    } else {
+      productData.price = product.price ? parseFloat(product.price) : null;
+      if (selectedMarketId) productData.market = selectedMarketId;
     }
 
     if (selectedImageId) productData.image = selectedImageId;
@@ -223,50 +255,55 @@ const AddOrEditProductForm = () => {
               helperText={errors.title}
             />
 
-            <Box
-              display="flex"
-              gap={3}
-              sx={{ flexDirection: { xs: "column", sm: "row" } }}
-            >
-              <TextField
-                name="price"
-                label="Price"
-                variant="outlined"
-                type="number"
-                fullWidth
-                value={product?.price || ""}
-                onChange={handleChange}
-                error={!!errors.price}
-                helperText={
-                  hasMultipleMarkets
-                    ? "Sold at multiple markets — edit prices individually"
-                    : errors.price
-                }
-                disabled={hasMultipleMarkets}
-                sx={{ flex: 1 }}
+            {isEditMode ? (
+              <MarketPricesTable
+                marketProducts={fetchedProduct?.marketProducts}
+                priceEdits={priceEdits}
+                removedMarkets={removedMarkets}
+                onPriceChange={handlePriceChange}
+                onToggleRemove={handleToggleRemove}
+                error={errors.prices}
               />
-
-              <FormControl fullWidth sx={{ flex: 1 }} error={!!errors.market}>
-                <InputLabel id="market-select-label">Market</InputLabel>
-                <Select
-                  labelId="market-select-label"
-                  name="market"
-                  value={selectedMarketId || ""}
-                  label="Market"
+            ) : (
+              <Box
+                display="flex"
+                gap={3}
+                sx={{ flexDirection: { xs: "column", sm: "row" } }}
+              >
+                <TextField
+                  name="price"
+                  label="Price"
+                  variant="outlined"
+                  type="number"
+                  fullWidth
+                  value={product?.price || ""}
                   onChange={handleChange}
-                  disabled={isEditMode}
-                >
-                  {markets.map((market) => (
-                    <MenuItem key={market._id} value={market._id}>
-                      {market.name}{market.chain?.name ? ` (${market.chain.name})` : ""}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.market && (
-                  <FormHelperText>{errors.market}</FormHelperText>
-                )}
-              </FormControl>
-            </Box>
+                  error={!!errors.price}
+                  helperText={errors.price}
+                  sx={{ flex: 1 }}
+                />
+
+                <FormControl fullWidth sx={{ flex: 1 }} error={!!errors.market}>
+                  <InputLabel id="market-select-label">Market</InputLabel>
+                  <Select
+                    labelId="market-select-label"
+                    name="market"
+                    value={selectedMarketId || ""}
+                    label="Market"
+                    onChange={handleChange}
+                  >
+                    {markets.map((market) => (
+                      <MenuItem key={market._id} value={market._id}>
+                        {market.name}{market.chain?.name ? ` (${market.chain.name})` : ""}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {errors.market && (
+                    <FormHelperText>{errors.market}</FormHelperText>
+                  )}
+                </FormControl>
+              </Box>
+            )}
 
             <TextField
               name="category"

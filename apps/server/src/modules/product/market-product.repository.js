@@ -124,6 +124,36 @@ export class MarketProductRepository {
    * scrape share its timestamp). 0 if it has never been scraped with stamps.
    * Stale rows are excluded, so they can't inflate the baseline and block cleanup.
    */
+  /** Hand-added rows only: explicit null, not scraper-stamped (or unmigrated) rows. */
+  async findManualByProduct(productId, marketIds) {
+    return MarketProductModel.find({
+      product: productId,
+      market: { $in: marketIds },
+      lastSeenAt: { $type: "null" },
+    }).exec();
+  }
+
+  async updateManualPrices(productId, prices) {
+    if (!prices.length) return null;
+    return MarketProductModel.bulkWrite(
+      prices.map(({ market, price }) => ({
+        updateOne: {
+          filter: { product: productId, market, lastSeenAt: { $type: "null" } },
+          update: { $set: { price } },
+        },
+      })),
+    );
+  }
+
+  async deleteManualByMarkets(productId, marketIds) {
+    if (!marketIds.length) return null;
+    return MarketProductModel.deleteMany({
+      product: productId,
+      market: { $in: marketIds },
+      lastSeenAt: { $type: "null" },
+    }).exec();
+  }
+
   async countSeenInLatestScrape(marketId) {
     const latest = await MarketProductModel.findOne({
       market: marketId,
