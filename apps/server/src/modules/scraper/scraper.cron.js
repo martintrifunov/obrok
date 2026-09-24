@@ -1,10 +1,11 @@
 import cron from "node-cron";
 import { syncProductEmbeddings } from "../search/product-embedding-sync.service.js";
 import { createAllScrapers } from "./scraper.registry.js";
+import { APP_TIME_ZONE } from "../../shared/utils/calendarDate.js";
 
 /**
  * Initialises the scraper cron job.
- * Schedule: 03:00 on Monday and Thursday (twice a week).
+ * Schedule: 03:00 Skopje time on Monday and Thursday (twice a week).
  *
  * @param {import('./scraper.service.js').ScraperService} scraperService
  * @param {import('../search/embedding.service.js').EmbeddingService} embeddingService
@@ -44,10 +45,10 @@ export const startScraperCron = (
       featureFlagService,
       logPrefix: "[ScraperCron]",
     });
-  });
+  }, { timezone: APP_TIME_ZONE });
 
   console.log(
-    "[ScraperCron] Scheduled — runs at 03:00 every Monday and Thursday.",
+    `[ScraperCron] Scheduled — runs at 03:00 ${APP_TIME_ZONE} every Monday and Thursday.`,
   );
 
   return task;

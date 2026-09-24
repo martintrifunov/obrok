@@ -46,7 +46,7 @@ createdAt: Date
 
 ### Cron Job
 
-- **Daily at 02:30**: purges raw events older than 90 days.
+- **Daily at 02:30 Europe/Skopje**: purges raw events older than 90 days.
 - Monthly aggregates are retained indefinitely.
 
 ### Dual Identity Tracking
