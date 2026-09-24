@@ -82,7 +82,12 @@ const HolidaysList = ({ searchTerm }) => {
 
   const handleRemoveHoliday = async (holidayId) => {
     if (window.confirm("Are you sure you want to remove this holiday?")) {
-      deleteMutation.mutate(holidayId);
+      deleteMutation.mutate(holidayId, {
+        // Step back when the last row on a page is removed so it isn't left empty.
+        onSuccess: () => {
+          if (holidays.length === 1 && page > 0) setPage(page - 1);
+        },
+      });
     }
   };
 
@@ -95,6 +100,7 @@ const HolidaysList = ({ searchTerm }) => {
       )}
 
       {isSmallScreen ? (
+        <>
         <Stack spacing={2} sx={{ width: "100%" }}>
           {!isLoading
             ? holidays.map((holiday) => (
@@ -161,6 +167,15 @@ const HolidaysList = ({ searchTerm }) => {
                   />
                 ))}
         </Stack>
+        <TablePagination
+          component="div"
+          count={totalHolidays}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[]}
+        />
+        </>
       ) : (
         <HolidaysTableContainer>
           <Table sx={{ minWidth: 400 }}>

@@ -67,7 +67,12 @@ const ProductsList = ({ searchTerm }) => {
 
   const handleRemoveProduct = async (productId) => {
     if (window.confirm("Are you sure you want to remove this product?")) {
-      deleteMutation.mutate(productId);
+      deleteMutation.mutate(productId, {
+        // Step back when the last row on a page is removed so it isn't left empty.
+        onSuccess: () => {
+          if (products.length === 1 && page > 0) setPage(page - 1);
+        },
+      });
     }
   };
 
@@ -85,6 +90,7 @@ const ProductsList = ({ searchTerm }) => {
         <Error variant="p">{error?.response?.data?.message || "Error"}</Error>
       )}
       {isSmallScreen ? (
+        <>
         <Stack spacing={2} sx={{ width: "100%" }}>
           {!isLoading
             ? products.map((product) => (
@@ -162,6 +168,15 @@ const ProductsList = ({ searchTerm }) => {
                   />
                 ))}
         </Stack>
+        <TablePagination
+          component="div"
+          count={totalProducts}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[]}
+        />
+        </>
       ) : (
         <TableWrapper>
           <Table sx={{ minWidth: 600 }}>

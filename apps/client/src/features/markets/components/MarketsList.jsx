@@ -75,7 +75,12 @@ const MarketsList = ({ searchTerm }) => {
         "Are you sure you want to remove this market?\nThis WILL REMOVE all of its price listings as well.",
       )
     ) {
-      deleteMutation.mutate(marketId);
+      deleteMutation.mutate(marketId, {
+        // Step back when the last row on a page is removed so it isn't left empty.
+        onSuccess: () => {
+          if (markets.length === 1 && page > 0) setPage(page - 1);
+        },
+      });
     }
   };
 
@@ -86,6 +91,7 @@ const MarketsList = ({ searchTerm }) => {
       )}
 
       {isSmallScreen ? (
+        <>
         <Stack spacing={2} sx={{ width: "100%" }}>
           {!isLoading
             ? markets.map((market) => (
@@ -176,6 +182,15 @@ const MarketsList = ({ searchTerm }) => {
                   />
                 ))}
         </Stack>
+        <TablePagination
+          component="div"
+          count={totalMarkets}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[]}
+        />
+        </>
       ) : (
         <MarketsTableContainer>
           <Table sx={{ minWidth: 600 }}>
