@@ -52,7 +52,11 @@ export class MarketRepository {
     return MarketModel.find({ chain: chainId }).exec();
   }
 
+  /**
+   * @param {{ chainId?: string, marketId?: string, from?: Date, to?: Date }} [filters]
+   */
   async findAllForReport({ chainId, marketId, from, to } = {}) {
+    /** @type {Record<string, any>} */
     const query = {};
     if (chainId) query.chain = chainId;
     if (marketId) query._id = marketId;

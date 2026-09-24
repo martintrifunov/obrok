@@ -6,7 +6,15 @@ import { buildBilingualRegex } from "../../shared/utils/bilingualRegex.js";
 const LEGACY_SEEN_AT = new Date(0);
 
 export class MarketProductRepository {
+  /**
+   * @param {object} params
+   * @param {string} params.marketId
+   * @param {number} params.page
+   * @param {number} params.limit
+   * @param {{ minPrice?: number, maxPrice?: number, title?: string, category?: string }} [params.filter]
+   */
   async findByMarket({ marketId, page, limit, filter = {} }) {
+    /** @type {Record<string, any>} */
     const matchStage = { market: new mongoose.Types.ObjectId(marketId) };
 
     if (filter.minPrice !== undefined || filter.maxPrice !== undefined) {
@@ -17,6 +25,7 @@ export class MarketProductRepository {
         matchStage.price.$lte = filter.maxPrice;
     }
 
+    /** @type {import("mongoose").PipelineStage[]} */
     const pipeline = [
       { $match: matchStage },
       {
@@ -74,6 +83,7 @@ export class MarketProductRepository {
   }
 
   async getUniqueCategories(marketId) {
+    /** @type {import("mongoose").PipelineStage[]} */
     const pipeline = [
       { $match: { market: new mongoose.Types.ObjectId(marketId) } },
       {
@@ -105,8 +115,13 @@ export class MarketProductRepository {
       .exec();
   }
 
+  /**
+   * @param {Array<{ market: unknown, product: unknown, price: number }>} entries
+   * @param {{ seenAt?: Date }} [options]
+   */
   async bulkUpsert(entries, { seenAt } = {}) {
     if (!entries.length) return null;
+    /** @type {import("mongoose").AnyBulkWriteOperation[]} */
     const ops = entries.map(({ market, product, price }) => ({
       updateOne: {
         filter: { market, product },
@@ -119,11 +134,6 @@ export class MarketProductRepository {
     return MarketProductModel.bulkWrite(ops, { ordered: false });
   }
 
-  /**
-   * How many products the market's most recent scrape saw (all rows seen in one
-   * scrape share its timestamp). 0 if it has never been scraped with stamps.
-   * Stale rows are excluded, so they can't inflate the baseline and block cleanup.
-   */
   /** Hand-added rows only: explicit null, not scraper-stamped (or unmigrated) rows. */
   async findManualByProduct(productId, marketIds) {
     return MarketProductModel.find({
@@ -174,6 +184,11 @@ export class MarketProductRepository {
     }).exec();
   }
 
+  /**
+   * How many products the market's most recent scrape saw (all rows seen in one
+   * scrape share its timestamp). 0 if it has never been scraped with stamps.
+   * Stale rows are excluded, so they can't inflate the baseline and block cleanup.
+   */
   async countSeenInLatestScrape(marketId) {
     const latest = await MarketProductModel.findOne({
       market: marketId,

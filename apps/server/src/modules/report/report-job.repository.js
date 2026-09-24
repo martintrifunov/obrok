@@ -28,6 +28,12 @@ export class ReportJobRepository {
    * the updated job, or null if the job had already left those statuses (e.g.
    * a cancel landed first), so concurrent transitions can't overwrite each other.
    */
+  /**
+   * @param {unknown} id
+   * @param {string[]} fromStatuses
+   * @param {Record<string, unknown>} update
+   * @param {{ requestedBy?: string }} [options]
+   */
   async transition(id, fromStatuses, update, { requestedBy } = {}) {
     return ReportJobModel.findOneAndUpdate(
       {

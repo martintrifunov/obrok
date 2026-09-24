@@ -161,6 +161,9 @@ export class SmartSearchService {
         totalPrice: Math.round(totalPrice),
         distance,
         products: productDetails,
+        // Set below once the weekly budget is known.
+        withinBudget: false,
+        overBudgetAmount: 0,
       };
     });
 
