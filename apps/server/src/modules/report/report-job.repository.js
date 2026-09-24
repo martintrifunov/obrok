@@ -23,6 +23,23 @@ export class ReportJobRepository {
     ).exec();
   }
 
+  /**
+   * Atomically moves a job from one of `fromStatuses` to a new state. Returns
+   * the updated job, or null if the job had already left those statuses (e.g.
+   * a cancel landed first), so concurrent transitions can't overwrite each other.
+   */
+  async transition(id, fromStatuses, update, { requestedBy } = {}) {
+    return ReportJobModel.findOneAndUpdate(
+      {
+        _id: id,
+        status: { $in: fromStatuses },
+        ...(requestedBy !== undefined && { requestedBy }),
+      },
+      { $set: update },
+      { returnDocument: "after" },
+    ).exec();
+  }
+
   async create(data) {
     return ReportJobModel.create(data);
   }

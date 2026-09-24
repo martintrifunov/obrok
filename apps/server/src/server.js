@@ -52,6 +52,7 @@ const start = async () => {
 
   const aborted = await reportService.abortInterruptedJobs();
   if (aborted > 0) console.log(`Marked ${aborted} interrupted report job(s) as aborted.`);
+  await reportService.cleanupStaleReports();
 
   const cronTasks = [
     startScraperCron(scraperService, embeddingService, productEmbeddingRepository, productRepository, featureFlagService),
