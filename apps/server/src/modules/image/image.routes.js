@@ -5,7 +5,7 @@ import verifyAdmin from "../auth/middleware/verifyAdmin.js";
 import upload from "../../config/multerConfig.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
 import { deleteImageSchema, imageParamsSchema } from "./image.schema.js";
-import { paginationSchema } from "../../shared/schemas/paginationSchema.js";
+import { paginationWithAllSchema } from "../../shared/schemas/paginationSchema.js";
 
 const router = Router();
 
@@ -13,7 +13,7 @@ router.get(
   "/",
   verifyJWT,
   verifyAdmin,
-  validateRequest(paginationSchema, "query"),
+  validateRequest(paginationWithAllSchema, "query"),
   imageController.getAll,
 );
 router.get(

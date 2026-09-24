@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { zodObjectId } from "../../shared/schemas/zodObjectId.js";
-import { paginationSchema } from "../../shared/schemas/paginationSchema.js";
+import { paginationWithAllSchema } from "../../shared/schemas/paginationSchema.js";
 
-export const chainQuerySchema = paginationSchema.extend({
+export const chainQuerySchema = paginationWithAllSchema.extend({
   name: z.string().optional(),
 });
 
