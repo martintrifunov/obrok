@@ -14,6 +14,10 @@ const PROTOCOL_TIMEOUT_MS = Number.parseInt(
   10,
 );
 
+// A store that suddenly lists far fewer products than before is more likely a
+// broken parser or layout change than a real delisting, so don't delete then.
+const MIN_RETAINED_RATIO = 0.5;
+
 const isTransientScrapeError = (err) => {
   const message = err?.message ?? "";
   return (
@@ -38,10 +42,52 @@ export class ScraperService {
     this.marketProductRepository = marketProductRepository;
     this.imageRepository = imageRepository;
     this.geocoderService = geocoderService;
+    this.legacyPriceRowsBackfilled = false;
+  }
+
+  async #backfillLegacyPriceRows() {
+    if (this.legacyPriceRowsBackfilled) return;
+
+    const [scrapedMarketIds, adminProductIds] = await Promise.all([
+      this.marketRepository.findScrapedIds(),
+      this.productRepository.findAdminEditedIds(),
+    ]);
+    const { stamped, adminOwned } = await this.marketProductRepository.backfillLastSeen({
+      scrapedMarketIds,
+      adminProductIds,
+    });
+    if (stamped || adminOwned) {
+      console.log(
+        `[ScraperService] Backfilled lastSeenAt: ${stamped} scraper-owned, ${adminOwned} admin-owned price rows.`,
+      );
+    }
+    this.legacyPriceRowsBackfilled = true;
+  }
+
+  async #removeStalePrices({ name, marketDoc, seenCount, previousCount, seenAt, complete }) {
+    if (!complete) {
+      console.warn(`[Scraper] ⚠️  [${name}] Incomplete scrape; keeping unseen prices.`);
+      return;
+    }
+    if (previousCount > 0 && seenCount < previousCount * MIN_RETAINED_RATIO) {
+      console.warn(
+        `[Scraper] ⚠️  [${name}] Saw ${seenCount} products, down from ${previousCount} last scrape; keeping unseen prices in case the scrape is broken.`,
+      );
+      return;
+    }
+
+    const { deletedCount } = await this.marketProductRepository.deleteUnseenSince(
+      marketDoc._id,
+      seenAt,
+    );
+    if (deletedCount) {
+      console.log(`[Scraper] 🧹 [${name}] Removed ${deletedCount} delisted or unavailable prices.`);
+    }
   }
 
   async runForMarket(scraper) {
     const startTime = performance.now();
+    await this.#backfillLegacyPriceRows();
     console.log(`\n[ScraperService] 🚀 Starting ${scraper.constructor.name}`);
     console.log(
       `[ScraperService] Settings: concurrency=${CONCURRENT_TABS}, navTimeout=${NAV_TIMEOUT_MS}ms, protocolTimeout=${PROTOCOL_TIMEOUT_MS}ms`,
@@ -230,7 +276,19 @@ export class ScraperService {
           price,
         }));
 
-      await this.marketProductRepository.bulkUpsert(marketProducts);
+      const seenAt = new Date();
+      const previousCount = await this.marketProductRepository.countSeenInLatestScrape(
+        marketDoc._id,
+      );
+      await this.marketProductRepository.bulkUpsert(marketProducts, { seenAt });
+      await this.#removeStalePrices({
+        name,
+        marketDoc,
+        seenCount: marketProducts.length,
+        previousCount,
+        seenAt,
+        complete: result.complete !== false,
+      });
 
       if (result.newUpdateDate) {
         marketDoc.lastScrapedUpdate = result.newUpdateDate;

@@ -51,9 +51,19 @@ flowchart TD
     E --> F[Navigate + Scrape Products/Prices]
     F --> G[Geocode New Markets]
     G --> H[Upsert Markets + Products + MarketProducts]
-    H --> I[Generate Embeddings for New/Changed Products]
+    H --> H2[Remove Stale Prices for the Store]
+    H2 --> I[Generate Embeddings for New/Changed Products]
     I --> J[Close Browser]
 ```
+
+### Stale Price Cleanup
+
+Each scrape stamps `lastSeenAt` on every MarketProduct row it upserts. After a store is scraped, that store's stamped rows that weren't seen in this run are deleted, which removes delisted and out-of-stock products.
+
+- Rows an admin created by hand have `lastSeenAt: null` and are never deleted by a scrape.
+- Cleanup is skipped (with a warning) when the scraper reports `complete: false`, or when the store now lists fewer than half as many products as its previous scrape saw. A layout change or broken parser should not wipe a store. The baseline is the previous scrape, not all stored rows, so accumulated stale rows can't block cleanup. The first stamped scrape of a store has no baseline, so only the zero-products and incomplete checks apply to it.
+- Stores whose pricelist is unchanged (`upToDate`) are skipped entirely, so nothing is deleted.
+- Rows created before `lastSeenAt` existed are backfilled once per process, before the first scrape: rows in scraped markets are stamped as long unseen unless their product has a description or image (admin-only fields), which are marked admin-owned.
 
 ### Strategy + Registry Pattern
 
@@ -109,6 +119,7 @@ The wipe script (`wipe-db-scrape-data.js`) supports two modes:
 | Failure | Behavior |
 |---------|----------|
 | Scraper page timeout | Skip market, log error, continue |
+| Partial or suspiciously small scrape | Save the prices seen, keep the unseen ones, log a warning |
 | Geocoding failure | Use city center fallback |
 | Embedding generation failure | Products saved without embeddings |
 | Browser crash | Cron retries on next scheduled run |

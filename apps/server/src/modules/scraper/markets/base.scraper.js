@@ -35,6 +35,7 @@
  * @property {boolean} upToDate
  * @property {ScrapedProduct[]} [products]
  * @property {Date | null} [newUpdateDate]
+ * @property {boolean} [complete] false when some pages failed; unseen prices are then kept
  */
 export class BaseScraper {
   /**

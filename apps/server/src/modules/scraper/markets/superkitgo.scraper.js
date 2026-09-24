@@ -169,6 +169,7 @@ export class SuperKitGoScraper extends BaseScraper {
       // Saving the date after a partial scrape would mark the store up to date
       // and skip the missing pages until the chain publishes a new pricelist.
       newUpdateDate: complete ? newUpdateDate : undefined,
+      complete,
     };
   }
 

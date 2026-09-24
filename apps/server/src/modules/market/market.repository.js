@@ -77,6 +77,10 @@ export class MarketRepository {
       .exec();
   }
 
+  async findScrapedIds() {
+    return MarketModel.distinct("_id", { lastScrapedUpdate: { $ne: null } }).exec();
+  }
+
   async create(data) {
     return MarketModel.create(data);
   }

@@ -107,6 +107,16 @@ export class ProductRepository {
     return new Map(docs.map((d) => [d.title, d._id]));
   }
 
+  /** Products carrying fields only the admin form sets (the scraper sets title and category only). */
+  async findAdminEditedIds() {
+    return ProductModel.distinct("_id", {
+      $or: [
+        { description: { $nin: [null, ""] } },
+        { image: { $ne: null } },
+      ],
+    }).exec();
+  }
+
   async getUniqueCategories() {
     return ProductModel.distinct("category", {
       category: { $ne: null },
