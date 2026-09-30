@@ -12,9 +12,15 @@ const MarketProductSchema = new mongoose.Schema({
     required: true,
   },
   price: { type: Number, required: true },
+  // Set by the scraper on every run that sees this row; null for rows an admin
+  // created by hand, which scrape cleanup never touches.
+  lastSeenAt: { type: Date, default: null },
 });
 
 MarketProductSchema.index({ market: 1, product: 1 }, { unique: true });
+MarketProductSchema.index({ market: 1, lastSeenAt: 1 });
+// Search looks up price rows by product (priced-product filter, hydration).
+MarketProductSchema.index({ product: 1 });
 
 export const MarketProductModel = mongoose.model(
   "MarketProduct",

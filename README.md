@@ -100,10 +100,10 @@ Production runs behind Nginx with TLS handled by Let's Encrypt via Certbot. The 
 For a new VPS, bootstrap certificates and start the stack with:
 
 ```bash
-./init-ssl.sh
+CERTBOT_EMAIL=you@example.com ./init-ssl.sh
 ```
 
-The script creates temporary certificates, starts Nginx, requests real certificates, reloads the web server, and brings the application online.
+Run `./init-route-data.sh` first; the script checks for OSRM data because Nginx won't start without it. It creates temporary certificates, starts Nginx, requests real certificates, reloads the web server, and brings the application online. Existing certificates are backed up first and restored if the request fails.
 
 ### Release workflow
 

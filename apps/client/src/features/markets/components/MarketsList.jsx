@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Typography,
   Table,
@@ -24,6 +24,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import { useNavigate, useLocation } from "react-router-dom";
 import useDebounce from "@/hooks/useDebounce";
+import useResettablePage from "@/hooks/useResettablePage";
 import SharedMarketProductsModal from "@/components/ui/SharedMarketProductsModal";
 import {
   useMarkets,
@@ -36,16 +37,12 @@ const MarketsList = ({ searchTerm }) => {
   const location = useLocation();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [page, setPage] = useState(0);
   const rowsPerPage = 5;
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState({ id: null, name: "" });
 
   const debouncedSearch = useDebounce(searchTerm);
-
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedSearch]);
+  const [page, setPage] = useResettablePage(debouncedSearch);
 
   const {
     data: responseData,
@@ -75,7 +72,12 @@ const MarketsList = ({ searchTerm }) => {
         "Are you sure you want to remove this market?\nThis WILL REMOVE all of its price listings as well.",
       )
     ) {
-      deleteMutation.mutate(marketId);
+      deleteMutation.mutate(marketId, {
+        // Step back when the last row on a page is removed so it isn't left empty.
+        onSuccess: () => {
+          if (markets.length === 1 && page > 0) setPage(page - 1);
+        },
+      });
     }
   };
 
@@ -86,6 +88,7 @@ const MarketsList = ({ searchTerm }) => {
       )}
 
       {isSmallScreen ? (
+        <>
         <Stack spacing={2} sx={{ width: "100%" }}>
           {!isLoading
             ? markets.map((market) => (
@@ -176,6 +179,15 @@ const MarketsList = ({ searchTerm }) => {
                   />
                 ))}
         </Stack>
+        <TablePagination
+          component="div"
+          count={totalMarkets}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[]}
+        />
+        </>
       ) : (
         <MarketsTableContainer>
           <Table sx={{ minWidth: 600 }}>

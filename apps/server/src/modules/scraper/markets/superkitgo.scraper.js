@@ -1,4 +1,5 @@
 import { BaseScraper } from "./base.scraper.js";
+import { parsePrice } from "../utils/parsePrice.js";
 
 const CENOVNIK_URL = "https://www.superkitgo.mk/cenovnik.html";
 const MARKETI_URL = "https://www.superkitgo.mk/marketi.html";
@@ -41,6 +42,9 @@ export class SuperKitGoScraper extends BaseScraper {
    * Discover markets from cenovnik.html (market numbers + type filter)
    * joined with marketi.html (full addresses).
    * Only returns markets tagged type === "super" (СУПЕР КИТ-ГО).
+   *
+   * @param {import('puppeteer').Page} page
+   * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
    */
   async fetchMarkets(page) {
     // --- Step 1: Get market list with numbers and types from cenovnik ---
@@ -110,6 +114,11 @@ export class SuperKitGoScraper extends BaseScraper {
    * Scrape products from a market's pricelist via the JSON API.
    * The table.php page exposes an ajax=1 endpoint that returns JSON,
    * completely bypassing any client-side anti-devtools JS.
+   *
+   * @param {import('puppeteer').Page} _page
+   * @param {string} storeUrl
+   * @param {Date | null} [previousUpdateString]
+   * @returns {Promise<import('./base.scraper.js').FetchProductsResult>}
    */
   async fetchProducts(_page, storeUrl, previousUpdateString) {
     // Fetch first page to get update date and pagination info
@@ -132,9 +141,14 @@ export class SuperKitGoScraper extends BaseScraper {
     const allProducts = this.#extractProducts(firstPageData.products);
 
     // Fetch remaining pages sequentially to be respectful to the server
+    let complete = true;
     for (let p = 2; p <= totalPages; p++) {
       const pageData = await this.#fetchPage(storeUrl, p);
-      if (!pageData?.success || !pageData.products?.length) break;
+      if (!pageData?.success) {
+        complete = false;
+        break;
+      }
+      if (!pageData.products?.length) break;
       allProducts.push(...this.#extractProducts(pageData.products));
     }
 
@@ -144,10 +158,19 @@ export class SuperKitGoScraper extends BaseScraper {
       latestByTitle.set(product.title, product);
     }
 
+    if (!complete) {
+      console.warn(
+        `[SuperKitGoScraper] Incomplete scrape of ${storeUrl}; not saving the update date so the next run retries.`,
+      );
+    }
+
     return {
       upToDate: false,
       products: Array.from(latestByTitle.values()),
-      newUpdateDate,
+      // Saving the date after a partial scrape would mark the store up to date
+      // and skip the missing pages until the chain publishes a new pricelist.
+      newUpdateDate: complete ? newUpdateDate : undefined,
+      complete,
     };
   }
 
@@ -189,9 +212,8 @@ export class SuperKitGoScraper extends BaseScraper {
       // Only include available products (dostapnost "1" = ДА)
       if (String(p.dostapnost) !== "1") return acc;
 
-      const rawPrice = String(p.prodazna_cena).replace(",", ".").replace(/[^\d.]/g, "");
-      const price = parseFloat(rawPrice);
-  if (isNaN(price) || price <= 0) return acc;
+      const price = parsePrice(p.prodazna_cena);
+      if (!(price > 0)) return acc;
 
       const title = (p.product_name || "").trim();
       if (!title) return acc;

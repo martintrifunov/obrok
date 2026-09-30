@@ -2,8 +2,19 @@ import mongoose from "mongoose";
 import { MarketProductModel } from "./market-product.model.js";
 import { buildBilingualRegex } from "../../shared/utils/bilingualRegex.js";
 
+// Stamp for pre-migration scraper rows: known scraper-owned, never seen by a stamped scrape.
+const LEGACY_SEEN_AT = new Date(0);
+
 export class MarketProductRepository {
+  /**
+   * @param {object} params
+   * @param {string} params.marketId
+   * @param {number} params.page
+   * @param {number} params.limit
+   * @param {{ minPrice?: number, maxPrice?: number, title?: string, category?: string }} [params.filter]
+   */
   async findByMarket({ marketId, page, limit, filter = {} }) {
+    /** @type {Record<string, any>} */
     const matchStage = { market: new mongoose.Types.ObjectId(marketId) };
 
     if (filter.minPrice !== undefined || filter.maxPrice !== undefined) {
@@ -14,6 +25,7 @@ export class MarketProductRepository {
         matchStage.price.$lte = filter.maxPrice;
     }
 
+    /** @type {import("mongoose").PipelineStage[]} */
     const pipeline = [
       { $match: matchStage },
       {
@@ -71,6 +83,7 @@ export class MarketProductRepository {
   }
 
   async getUniqueCategories(marketId) {
+    /** @type {import("mongoose").PipelineStage[]} */
     const pipeline = [
       { $match: { market: new mongoose.Types.ObjectId(marketId) } },
       {
@@ -102,20 +115,133 @@ export class MarketProductRepository {
       .exec();
   }
 
-  async bulkUpsert(entries) {
+  /**
+   * @param {Array<{ market: unknown, product: unknown, price: number }>} entries
+   * @param {{ seenAt?: Date }} [options]
+   */
+  async bulkUpsert(entries, { seenAt } = {}) {
     if (!entries.length) return null;
+    /** @type {import("mongoose").AnyBulkWriteOperation[]} */
     const ops = entries.map(({ market, product, price }) => ({
       updateOne: {
         filter: { market, product },
-        update: { $set: { market, product, price } },
+        update: {
+          $set: { market, product, price, ...(seenAt && { lastSeenAt: seenAt }) },
+        },
         upsert: true,
       },
     }));
     return MarketProductModel.bulkWrite(ops, { ordered: false });
   }
 
+  async findManualByProduct(productId, marketIds) {
+    return MarketProductModel.find({
+      product: productId,
+      market: { $in: marketIds },
+      lastSeenAt: { $type: "null" },
+    }).exec();
+  }
+
+  async updateManualPrices(productId, prices) {
+    if (!prices.length) return null;
+    return MarketProductModel.bulkWrite(
+      prices.map(({ market, price }) => ({
+        updateOne: {
+          filter: { product: productId, market, lastSeenAt: { $type: "null" } },
+          update: { $set: { price } },
+        },
+      })),
+    );
+  }
+
+  async findByProductAndMarkets(productId, marketIds) {
+    return MarketProductModel.find({
+      product: productId,
+      market: { $in: marketIds },
+    }).exec();
+  }
+
+  async insertManualPrices(productId, entries) {
+    if (!entries.length) return null;
+    return MarketProductModel.insertMany(
+      entries.map(({ market, price }) => ({
+        market,
+        product: productId,
+        price,
+        lastSeenAt: null,
+      })),
+    );
+  }
+
+  async deleteManualByMarkets(productId, marketIds) {
+    if (!marketIds.length) return null;
+    return MarketProductModel.deleteMany({
+      product: productId,
+      market: { $in: marketIds },
+      lastSeenAt: { $type: "null" },
+    }).exec();
+  }
+
+  async countSeenInLatestScrape(marketId) {
+    const latest = await MarketProductModel.findOne({
+      market: marketId,
+      lastSeenAt: { $gt: LEGACY_SEEN_AT },
+    })
+      .sort({ lastSeenAt: -1 })
+      .select("lastSeenAt")
+      .lean()
+      .exec();
+    if (!latest) return 0;
+
+    return MarketProductModel.countDocuments({
+      market: marketId,
+      lastSeenAt: latest.lastSeenAt,
+    }).exec();
+  }
+
+  async deleteUnseenSince(marketId, seenAt) {
+    return MarketProductModel.deleteMany({
+      market: marketId,
+      lastSeenAt: { $ne: null, $lt: seenAt },
+    }).exec();
+  }
+
+  async backfillLastSeen({ scrapedMarketIds, adminProductIds }) {
+    const legacy = { lastSeenAt: { $exists: false } };
+    const stamped = await MarketProductModel.updateMany(
+      {
+        ...legacy,
+        market: { $in: scrapedMarketIds },
+        product: { $nin: adminProductIds },
+      },
+      { $set: { lastSeenAt: LEGACY_SEEN_AT } },
+    ).exec();
+    const unowned = await MarketProductModel.updateMany(legacy, {
+      $set: { lastSeenAt: null },
+    }).exec();
+    return { stamped: stamped.modifiedCount, adminOwned: unowned.modifiedCount };
+  }
+
   async create(data) {
     return MarketProductModel.create(data);
+  }
+
+  async findUnseenProductIds(marketId, seenAt) {
+    return MarketProductModel.distinct("product", {
+      market: marketId,
+      lastSeenAt: { $ne: null, $lt: seenAt },
+    }).exec();
+  }
+
+  async findProductIdsByMarket(marketId) {
+    return MarketProductModel.distinct("product", { market: marketId }).exec();
+  }
+
+  async findPricedProductIds(productIds) {
+    if (!productIds.length) return [];
+    return MarketProductModel.distinct("product", {
+      product: { $in: productIds },
+    }).exec();
   }
 
   async deleteByMarket(marketId, options = {}) {

@@ -1,4 +1,5 @@
 import { fetchPublic } from "@/api/fetch";
+import { queryClient } from "@/api/queryClient";
 import { useAuthStore } from "@/store/authStore";
 
 const useLogout = () => {
@@ -6,6 +7,8 @@ const useLogout = () => {
 
   const logout = async () => {
     logoutAction();
+    // Drop cached admin data so the next account on this tab can't see it.
+    queryClient.clear();
     try {
       await fetchPublic("/logout");
     } catch (err) {

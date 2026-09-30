@@ -2,6 +2,7 @@ import { Router } from "express";
 import { analyticsController } from "../../container.js";
 import verifyJWT from "../auth/middleware/verifyJWT.js";
 import optionalVerifyJWT from "../auth/middleware/optionalVerifyJWT.js";
+import verifyAdmin from "../auth/middleware/verifyAdmin.js";
 import verifyAdminUser from "../auth/middleware/verifyAdminUser.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
 import {
@@ -31,6 +32,7 @@ router.post(
 router.get(
   "/summary",
   verifyJWT,
+  verifyAdmin,
   validateRequest(analyticsSummaryQuerySchema, "query"),
   analyticsController.summary,
 );
@@ -38,6 +40,7 @@ router.get(
 router.get(
   "/feature-trends",
   verifyJWT,
+  verifyAdmin,
   validateRequest(analyticsFeatureTrendQuerySchema, "query"),
   analyticsController.featureTrends,
 );

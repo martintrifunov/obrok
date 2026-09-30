@@ -1,5 +1,26 @@
 import { haversineDistance } from "../../shared/utils/haversine.js";
 import { calculateWeeklyBudget } from "../../shared/utils/obrokBudget.js";
+import { buildWordStartMatcher } from "../../shared/utils/bilingualRegex.js";
+import {
+  todayInAppTimeZone,
+  utcDateToLocalCalendarDate,
+  utcRangeForCalendarDays,
+} from "../../shared/utils/calendarDate.js";
+
+// Used only when no result names the ingredient as a word (e.g. an unusual
+// spelling); the hybrid ranking then decides, not the lowest price.
+const FALLBACK_RESULTS = 3;
+
+/**
+ * @param {string} ingredient
+ * @param {Array<{ product: { title?: string }, marketProducts: Array<object> }>} results
+ */
+export const pickIngredientCandidates = (ingredient, results) => {
+  const matches = buildWordStartMatcher(ingredient);
+  const strict = results.filter((r) => matches(r.product?.title || ""));
+  if (strict.length) return { results: strict, strict: true };
+  return { results: results.slice(0, FALLBACK_RESULTS), strict: false };
+};
 
 export class SmartSearchService {
   constructor(intentParserService, searchService, featureFlagService, publicHolidayService, analyticsService = null) {
@@ -51,19 +72,20 @@ export class SmartSearchService {
     // Search for each product in parallel
     const productSearches = await Promise.all(
       intent.products.map(async (productName) => {
-        const result = await this.searchService.search({
+        const result = await this.searchService.searchProducts({
           q: productName,
           page: 1,
           limit: 20,
+          parseIntent: false,
         });
-        return { name: productName, results: result.data };
+        return { name: productName, ...pickIngredientCandidates(productName, result.data) };
       }),
     );
 
-    // Build a shopping list with match status
+    // Build a shopping list with match status: found means some market sells it.
     const shoppingList = productSearches.map((ps) => ({
       name: ps.name,
-      found: ps.results.length > 0,
+      found: ps.results.some((r) => r.marketProducts.some((mp) => mp.market?._id)),
     }));
 
     // Collect all markets that carry at least one product
@@ -86,8 +108,12 @@ export class SmartSearchService {
           const entry = marketMap.get(mid);
           const existing = entry.products.get(ps.name);
 
-          // Keep the cheapest option per product per market
-          if (!existing || mp.price < existing.price) {
+          // Among real matches keep the cheapest per market; for fallback
+          // results (no real match) keep the best-ranked instead.
+          const better = ps.strict
+            ? !existing || mp.price < existing.price
+            : !existing;
+          if (better) {
             entry.products.set(ps.name, {
               product: result.product,
               price: mp.price,
@@ -132,6 +158,9 @@ export class SmartSearchService {
         totalPrice: Math.round(totalPrice),
         distance,
         products: productDetails,
+        // Set below once the weekly budget is known.
+        withinBudget: false,
+        overBudgetAmount: 0,
       };
     });
 
@@ -197,18 +226,19 @@ export class SmartSearchService {
   }
 
   async #computeBudget() {
-    const now = new Date();
-    const monday = this.#getMondayOfWeek(now);
+    const today = todayInAppTimeZone();
+    const monday = this.#getMondayOfWeek(today);
     const saturday = new Date(monday);
     saturday.setDate(saturday.getDate() + 5);
 
     let holidayDates = [];
     if (this.publicHolidayService) {
-      const holidays = await this.publicHolidayService.getHolidaysByDateRange(monday, saturday);
-      holidayDates = holidays.map((h) => h.date);
+      const { from, to } = utcRangeForCalendarDays(monday, saturday);
+      const holidays = await this.publicHolidayService.getHolidaysByDateRange(from, to);
+      holidayDates = holidays.map((h) => utcDateToLocalCalendarDate(new Date(h.date)));
     }
 
-    const budgetInfo = calculateWeeklyBudget(now, holidayDates);
+    const budgetInfo = calculateWeeklyBudget(today, holidayDates);
     return {
       weeklyBudget: budgetInfo.budget,
       budgetInfo,

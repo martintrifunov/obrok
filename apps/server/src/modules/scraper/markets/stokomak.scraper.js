@@ -1,5 +1,6 @@
 import { BaseScraper } from "./base.scraper.js";
 import { extractProductsFromTable } from "../utils/table-evaluate.js";
+import { withParsedPrices } from "../utils/parsePrice.js";
 
 const INDEX_URL = "https://stokomak.proverkanaceni.mk/";
 
@@ -16,6 +17,10 @@ export class StokomakScraper extends BaseScraper {
     return "Македонија";
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
+   */
   async fetchMarkets(page) {
     await page.goto(INDEX_URL, { waitUntil: "domcontentloaded" });
 
@@ -51,6 +56,12 @@ export class StokomakScraper extends BaseScraper {
     return BaseScraper.deduplicateByName(entries);
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @param {string} storeUrl
+   * @param {Date | null} [previousUpdateString]
+   * @returns {Promise<import('./base.scraper.js').FetchProductsResult>}
+   */
   async fetchProducts(page, storeUrl, previousUpdateString) {
     const allProducts = [];
     let currentUrl = storeUrl;
@@ -75,7 +86,9 @@ export class StokomakScraper extends BaseScraper {
         isFirstPage = false;
       }
 
-      const pageProducts = await page.evaluate(extractProductsFromTable);
+      const pageProducts = withParsedPrices(
+        await page.evaluate(extractProductsFromTable),
+      );
 
       allProducts.push(...pageProducts);
 

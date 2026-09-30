@@ -35,7 +35,7 @@ export const getClusterGradient = (cluster, supercluster) => {
       .join(", ");
 
     return `conic-gradient(from 0deg, ${gradientStops})`;
-  } catch (e) {
+  } catch {
     return null;
   }
 };

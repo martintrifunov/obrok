@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Marker, Popup } from "react-map-gl/maplibre";
 import { Typography, Box, styled } from "@mui/material";
 import creditPopupIcon from "@/assets/icons/credit_popup.svg";

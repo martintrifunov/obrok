@@ -23,7 +23,6 @@ Automated web scraping pipeline using Puppeteer with concurrent tabs, market dis
 | `stokomak.scraper.js` | Stokomak scraper |
 | `kam.scraper.js` | KAM scraper |
 | `superkitgo.scraper.js` | SuperKitGo scraper |
-| `kipper.scraper.js` | Kipper scraper |
 | `utils/` | Shared scraping utilities |
 
 ### Scripts
@@ -31,13 +30,13 @@ Automated web scraping pipeline using Puppeteer with concurrent tabs, market dis
 | Command | Description |
 |---------|-------------|
 | `npm run scrape` | Run all scrapers |
-| `npm run scrape:<chain>` | Run a single chain scraper |
+| `npm run scrape -- <chain>` | Run a single chain scraper |
 | `npm run scrape:db:wipe` | Wipe all scrape-related data |
-| `npm run scrape:db:wipe:<chain>` | Wipe a single chain's data (markets, products, embeddings) |
+| `npm run scrape:db:wipe -- <chain>` | Wipe a single chain's data (markets, products, embeddings) |
 
 ### Cron Schedule
 
-- **When**: Monday and Thursday at 03:00
+- **When**: Monday and Thursday at 03:00 Europe/Skopje time (not the container's UTC)
 - **Concurrency**: 2 tabs in production, 4 in development
 
 ### Pipeline
@@ -51,9 +50,27 @@ flowchart TD
     E --> F[Navigate + Scrape Products/Prices]
     F --> G[Geocode New Markets]
     G --> H[Upsert Markets + Products + MarketProducts]
-    H --> I[Generate Embeddings for New/Changed Products]
+    H --> H2[Remove Stale Prices for the Store]
+    H2 --> I[Generate Embeddings for New/Changed Products]
     I --> J[Close Browser]
 ```
+
+### Stale Price Cleanup
+
+Each scrape stamps `lastSeenAt` on every MarketProduct row it upserts. After a store is scraped, that store's stamped rows that weren't seen in this run are deleted, which removes delisted and out-of-stock products.
+
+- Rows an admin created by hand have `lastSeenAt: null` and are never deleted by a scrape.
+- Cleanup is skipped (with a warning) when the scraper reports `complete: false`, or when the store now lists fewer than half as many products as its previous scrape saw. A layout change or broken parser should not wipe a store. The baseline is the previous scrape, not all stored rows, so accumulated stale rows can't block cleanup. The first stamped scrape of a store has no baseline, so only the zero-products and incomplete checks apply to it.
+- Stores whose pricelist is unchanged (`upToDate`) are skipped entirely, so nothing is deleted.
+- Rows created before `lastSeenAt` existed are backfilled once per process, before the first scrape: rows in scraped markets are stamped as long unseen unless their product has a description or image (admin-only fields), which are marked admin-owned.
+
+### Orphaned Products
+
+A product whose last price row is gone (stale price cleanup, or a market or chain delete) is deleted together with its embedding. Only scraper-made products are removed: a product with a description or image was edited by an admin and is kept even without prices.
+
+- During a scrape, candidates are collected from the rows each store's cleanup removed, and removed once the whole chain's run has finished. Stores are scraped in parallel tabs, so a product that looks unpriced mid-run may be about to get a price from another store.
+- Every candidate is re-checked for price rows right before deletion.
+- Orphans that already exist are swept once per process, at startup and before the first scrape in standalone scripts.
 
 ### Strategy + Registry Pattern
 
@@ -71,10 +88,18 @@ registry.register(ramstoreScraper);
 Three-tier strategy, in order:
 
 1. **Static override** — `data/market-coordinates.json`, keyed by normalized market name. Checked first; this is how manually-corrected or chain-provided coordinates take precedence over the two automated tiers below.
-2. **Nominatim lookup** — queries built from address, store name, and transliterated variants.
+2. **Nominatim lookup** — queries built from address, store name, and transliterated variants. Every request is spaced at least 1.1s after the previous one (Nominatim allows 1 request/second). HTTP errors are logged rather than treated as "no match"; a 429 backs off 5s and retries once.
 3. **City-center fallback** — if every Nominatim query fails, places the market near a hardcoded city-center coordinate with a small deterministic offset (so multiple failed lookups in the same city don't stack on one point).
 
 See [Geolocation](/concepts/geolocation) for why the static tier exists and its known failure mode.
+
+### KAM PDF Text Extraction
+
+KAM publishes each store's pricelist as a PDF, read by the dependency-free `utils/pdf-text-extractor.js`. Glyph codes are mapped to Unicode through each font's ToUnicode CMap, supporting `bfchar`, `bfrange` with hex destinations (the last UTF-16 code unit increments per code) and `bfrange` with array destinations. Destinations are decoded as UTF-16BE, so ligatures (`<00660069>` = "fi") and surrogate pairs work. Malformed entries are skipped instead of failing the store.
+
+### Price Parsing
+
+All scrapers parse prices with `utils/parsePrice.js`, which accepts both `1.299,00` and `1,299.00` styles, spaces (including NBSP) as thousands separators, and currency text. When both `.` and `,` appear, the last one is the decimal separator. A single separator followed by exactly three digits (`2.450`) is read as thousands, since MKD grocery prices don't have three decimals. Code that runs inside `page.evaluate` (the shared table extractor and Ramstore's DataTables fast path) returns the raw `priceText`, and Node parses it with `withParsedPrices`, because browser-context functions can't import modules.
 
 ### Performance Optimizations
 
@@ -95,7 +120,7 @@ See [Geolocation](/concepts/geolocation) for why the static tier exists and its 
 The wipe script (`wipe-db-scrape-data.js`) supports two modes:
 
 - **Full wipe** (`npm run scrape:db:wipe`): deletes all chains, markets, market_products, products, and product_embeddings.
-- **Per-chain wipe** (`npm run scrape:db:wipe:<chain>`): deletes only the target chain's markets and market_products, removes orphaned products and embeddings not referenced by other chains, then deletes the chain record.
+- **Per-chain wipe** (`npm run scrape:db:wipe -- <chain>`): deletes only the target chain's markets and market_products, removes orphaned products and embeddings not referenced by other chains, then deletes the chain record.
 
 ## Source Anchors
 
@@ -109,6 +134,8 @@ The wipe script (`wipe-db-scrape-data.js`) supports two modes:
 | Failure | Behavior |
 |---------|----------|
 | Scraper page timeout | Skip market, log error, continue |
+| Browser tab crashes (open, setup, or close fails) | Skip that store, log error, other stores in the batch continue |
+| Partial or suspiciously small scrape | Save the prices seen, keep the unseen ones, log a warning |
 | Geocoding failure | Use city center fallback |
 | Embedding generation failure | Products saved without embeddings |
 | Browser crash | Cron retries on next scheduled run |

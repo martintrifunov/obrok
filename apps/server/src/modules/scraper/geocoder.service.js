@@ -7,6 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+// Nominatim's usage policy allows at most 1 request per second.
+const NOMINATIM_MIN_INTERVAL_MS = 1100;
+const NOMINATIM_RATE_LIMIT_BACKOFF_MS = 5000;
 
 const COORDS_PATH = resolve(__dirname, "../../data/market-coordinates.json");
 
@@ -118,7 +121,15 @@ function transliterate(text) {
 export class GeocoderService {
   #staticCoords;
 
-  constructor() {
+  #lastRequestAt = 0;
+
+  /**
+   * @param {{ sleep?: (ms: number) => Promise<void>, now?: () => number }} [options]
+   *   Injectable clock for tests.
+   */
+  constructor({ sleep, now } = {}) {
+    this.sleepFn = sleep ?? ((ms) => new Promise((res) => setTimeout(res, ms)));
+    this.now = now ?? (() => Date.now());
     try {
       this.#staticCoords = JSON.parse(readFileSync(COORDS_PATH, "utf-8"));
       console.log(
@@ -148,7 +159,8 @@ export class GeocoderService {
     const city = this.#getCity(address) || "";
 
     const cleanAddress = address
-      ?.replace(/(Бул\.|Ул\.|ул\.|бул\.|бр\.|бр)/gi, "")
+      // Strip street/number prefixes only as whole words ("бр" must not eat "Брегалница").
+      ?.replace(/(?<!\p{L})(?:бул|ул|бр)(?:\.|(?!\p{L}))/giu, "")
       .split("–")[0]
       .trim();
 
@@ -167,7 +179,6 @@ export class GeocoderService {
         console.log(`[GeocoderService] ✅ Found match via: "${q}"`);
         return [result.lat, result.lon];
       }
-      await this.#sleep(1100);
     }
 
     const cityFallback = this.#fallbackFromCity(city, key);
@@ -230,7 +241,13 @@ export class GeocoderService {
     return null;
   }
 
-  async #search(query) {
+  async #throttle() {
+    const wait = this.#lastRequestAt + NOMINATIM_MIN_INTERVAL_MS - this.now();
+    if (wait > 0) await this.sleepFn(wait);
+    this.#lastRequestAt = this.now();
+  }
+
+  async #search(query, { retriedAfterRateLimit = false } = {}) {
     try {
       const url = new URL(NOMINATIM_URL);
       url.searchParams.set("q", query);
@@ -238,15 +255,29 @@ export class GeocoderService {
       url.searchParams.set("limit", "1");
       url.searchParams.set("countrycodes", "mk"); // Lock to Macedonia
 
+      await this.#throttle();
       const response = await fetch(url.toString(), {
         headers: { "User-Agent": "StudentObrok/1.0" },
       });
+
+      if (!response.ok) {
+        // Not a "no match": log it so a blocked or failing geocoder is visible.
+        console.warn(
+          `[GeocoderService] Nominatim returned HTTP ${response.status} for "${query}".`,
+        );
+        if (response.status === 429 && !retriedAfterRateLimit) {
+          await this.sleepFn(NOMINATIM_RATE_LIMIT_BACKOFF_MS);
+          return this.#search(query, { retriedAfterRateLimit: true });
+        }
+        return null;
+      }
 
       const results = await response.json();
       return results.length > 0
         ? { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) }
         : null;
-    } catch {
+    } catch (err) {
+      console.warn(`[GeocoderService] Nominatim request failed for "${query}": ${err.message}`);
       return null;
     }
   }
@@ -275,9 +306,5 @@ export class GeocoderService {
       hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
     }
     return hash;
-  }
-
-  #sleep(ms) {
-    return new Promise((res) => setTimeout(res, ms));
   }
 }

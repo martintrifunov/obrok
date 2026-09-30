@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ProductService } from "./product.service.js";
 import { NotFoundError } from "../../shared/errors/NotFoundError.js";
-import mongoose from "mongoose";
+import { ValidationError } from "../../shared/errors/ValidationError.js";
 
 vi.mock("mongoose", async () => {
   const actual = await vi.importActual("mongoose");
@@ -37,10 +37,19 @@ const mockMarketProductRepository = {
   findByMarket: vi.fn(),
   create: vi.fn(),
   deleteByProduct: vi.fn(),
+  findManualByProduct: vi.fn().mockResolvedValue([]),
+  updateManualPrices: vi.fn(),
+  deleteManualByMarkets: vi.fn(),
+  findByProductAndMarkets: vi.fn().mockResolvedValue([]),
+  insertManualPrices: vi.fn(),
 };
 
 const mockProductEmbeddingRepository = {
   deleteByProduct: vi.fn(),
+};
+
+const mockImageService = {
+  deleteIfUnused: vi.fn(),
 };
 
 const makeSut = () =>
@@ -50,6 +59,7 @@ const makeSut = () =>
     mockImageRepository,
     mockMarketProductRepository,
     mockProductEmbeddingRepository,
+    mockImageService,
   );
 
 beforeEach(() => vi.clearAllMocks());
@@ -209,6 +219,123 @@ describe("ProductService", () => {
       expect(mockProductRepository.save).toHaveBeenCalledWith(product);
     });
 
+    it("updates and removes hand-added prices", async () => {
+      const product = { _id: "p1", title: "Old" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockProductRepository.save.mockResolvedValue(product);
+      mockMarketProductRepository.findManualByProduct.mockResolvedValue([
+        { market: "m1" },
+        { market: "m2" },
+      ]);
+      const sut = makeSut();
+
+      await sut.updateProduct("p1", {
+        prices: [{ market: "m1", price: 99 }],
+        removedMarkets: ["m2"],
+      });
+
+      expect(mockMarketProductRepository.findManualByProduct).toHaveBeenCalledWith("p1", ["m1", "m2"]);
+      expect(mockMarketProductRepository.updateManualPrices).toHaveBeenCalledWith("p1", [
+        { market: "m1", price: 99 },
+      ]);
+      expect(mockMarketProductRepository.deleteManualByMarkets).toHaveBeenCalledWith("p1", ["m2"]);
+    });
+
+    describe("addedPrices", () => {
+      const product = () => ({ _id: "p1", title: "Old" });
+
+      it("inserts hand-added prices at new markets", async () => {
+        const p = product();
+        mockProductRepository.findById.mockResolvedValue(p);
+        mockProductRepository.save.mockResolvedValue(p);
+        mockMarketRepository.findById.mockResolvedValue({ _id: "m9" });
+        mockMarketProductRepository.findByProductAndMarkets.mockResolvedValue([]);
+        const sut = makeSut();
+
+        await sut.updateProduct("p1", { addedPrices: [{ market: "m9", price: 50 }] });
+
+        expect(mockMarketProductRepository.findByProductAndMarkets).toHaveBeenCalledWith("p1", ["m9"]);
+        expect(mockMarketProductRepository.insertManualPrices).toHaveBeenCalledWith("p1", [
+          { market: "m9", price: 50 },
+        ]);
+      });
+
+      it("rejects a market the product already has a price at, saving nothing", async () => {
+        const p = product();
+        mockProductRepository.findById.mockResolvedValue(p);
+        mockMarketRepository.findById.mockResolvedValue({ _id: "m9" });
+        mockMarketProductRepository.findByProductAndMarkets.mockResolvedValue([{ market: "m9" }]);
+        const sut = makeSut();
+
+        await expect(
+          sut.updateProduct("p1", { title: "New", addedPrices: [{ market: "m9", price: 50 }] }),
+        ).rejects.toThrow(ValidationError);
+        expect(mockProductRepository.save).not.toHaveBeenCalled();
+        expect(mockMarketProductRepository.insertManualPrices).not.toHaveBeenCalled();
+      });
+
+      it("rejects a market that no longer exists", async () => {
+        mockProductRepository.findById.mockResolvedValue(product());
+        mockMarketRepository.findById.mockResolvedValue(null);
+        const sut = makeSut();
+
+        await expect(
+          sut.updateProduct("p1", { addedPrices: [{ market: "gone", price: 50 }] }),
+        ).rejects.toThrow(ValidationError);
+        expect(mockMarketProductRepository.insertManualPrices).not.toHaveBeenCalled();
+      });
+
+      it("rejects adding a market that is also being changed or removed", async () => {
+        mockProductRepository.findById.mockResolvedValue(product());
+        mockMarketProductRepository.findManualByProduct.mockResolvedValue([{ market: "m1" }]);
+        const sut = makeSut();
+
+        await expect(
+          sut.updateProduct("p1", {
+            removedMarkets: ["m1"],
+            addedPrices: [{ market: "m1", price: 50 }],
+          }),
+        ).rejects.toThrow(ValidationError);
+        expect(mockProductRepository.save).not.toHaveBeenCalled();
+      });
+    });
+
+    it("rejects changes to scraped prices without saving anything", async () => {
+      const product = { _id: "p1", title: "Old" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockMarketProductRepository.findManualByProduct.mockResolvedValue([{ market: "m1" }]);
+      const sut = makeSut();
+
+      await expect(
+        sut.updateProduct("p1", {
+          title: "New",
+          prices: [{ market: "m1", price: 99 }, { market: "scraped", price: 1 }],
+        }),
+      ).rejects.toThrow(ValidationError);
+      expect(mockProductRepository.save).not.toHaveBeenCalled();
+      expect(mockMarketProductRepository.updateManualPrices).not.toHaveBeenCalled();
+      expect(product.title).toBe("Old");
+    });
+
+    it("clears the image when image is null", async () => {
+      const product = { _id: "p1", title: "Old", image: "img1" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockProductRepository.save.mockResolvedValue(product);
+      const sut = makeSut();
+      await sut.updateProduct("p1", { image: null });
+      expect(product.image).toBeNull();
+      expect(mockImageRepository.findById).not.toHaveBeenCalled();
+    });
+
+    it("keeps the image when image is omitted", async () => {
+      const product = { _id: "p1", title: "Old", image: "img1" };
+      mockProductRepository.findById.mockResolvedValue(product);
+      mockProductRepository.save.mockResolvedValue(product);
+      const sut = makeSut();
+      await sut.updateProduct("p1", { title: "New" });
+      expect(product.image).toBe("img1");
+    });
+
     it("throws NotFoundError if new image does not exist", async () => {
       const product = { _id: "p1", title: "Old" };
       mockProductRepository.findById.mockResolvedValue(product);
@@ -238,6 +365,15 @@ describe("ProductService", () => {
       expect(mockMarketProductRepository.deleteByProduct).toHaveBeenCalledWith("p1");
       expect(mockProductEmbeddingRepository.deleteByProduct).toHaveBeenCalledWith("p1");
       expect(mockProductRepository.delete).toHaveBeenCalledWith(product);
+    });
+
+    it("cleans up the product's image after deleting it", async () => {
+      mockProductRepository.findById.mockResolvedValue({ _id: "p1", image: { _id: "img1" } });
+      const sut = makeSut();
+
+      await sut.deleteProduct("p1");
+
+      expect(mockImageService.deleteIfUnused).toHaveBeenCalledWith("img1");
     });
   });
 });

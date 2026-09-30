@@ -1,4 +1,6 @@
 import { ImageModel } from "./image.model.js";
+import { ChainModel } from "../chain/chain.model.js";
+import { ProductModel } from "../product/product.model.js";
 
 export class ImageRepository {
   async findAll({ page, limit }) {
@@ -24,6 +26,14 @@ export class ImageRepository {
 
   async findByTitle(title) {
     return ImageModel.findOne({ title }).exec();
+  }
+
+  async countReferences(imageId) {
+    const [chains, products] = await Promise.all([
+      ChainModel.countDocuments({ image: imageId }).exec(),
+      ProductModel.countDocuments({ image: imageId }).exec(),
+    ]);
+    return { chains, products };
   }
 
   async create(data) {

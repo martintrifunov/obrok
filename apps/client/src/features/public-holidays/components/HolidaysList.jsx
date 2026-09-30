@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   Typography,
   Table,
@@ -22,6 +22,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useNavigate, useLocation } from "react-router-dom";
 import useDebounce from "@/hooks/useDebounce";
+import useResettablePage from "@/hooks/useResettablePage";
 import {
   useHolidays,
   useDeleteHoliday,
@@ -49,14 +50,10 @@ const HolidaysList = ({ searchTerm }) => {
   const location = useLocation();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [page, setPage] = useState(0);
   const rowsPerPage = 5;
 
   const debouncedSearch = useDebounce(searchTerm);
-
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedSearch]);
+  const [page, setPage] = useResettablePage(debouncedSearch);
 
   const {
     data: responseData,
@@ -82,7 +79,12 @@ const HolidaysList = ({ searchTerm }) => {
 
   const handleRemoveHoliday = async (holidayId) => {
     if (window.confirm("Are you sure you want to remove this holiday?")) {
-      deleteMutation.mutate(holidayId);
+      deleteMutation.mutate(holidayId, {
+        // Step back when the last row on a page is removed so it isn't left empty.
+        onSuccess: () => {
+          if (holidays.length === 1 && page > 0) setPage(page - 1);
+        },
+      });
     }
   };
 
@@ -95,6 +97,7 @@ const HolidaysList = ({ searchTerm }) => {
       )}
 
       {isSmallScreen ? (
+        <>
         <Stack spacing={2} sx={{ width: "100%" }}>
           {!isLoading
             ? holidays.map((holiday) => (
@@ -161,6 +164,15 @@ const HolidaysList = ({ searchTerm }) => {
                   />
                 ))}
         </Stack>
+        <TablePagination
+          component="div"
+          count={totalHolidays}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[]}
+        />
+        </>
       ) : (
         <HolidaysTableContainer>
           <Table sx={{ minWidth: 400 }}>

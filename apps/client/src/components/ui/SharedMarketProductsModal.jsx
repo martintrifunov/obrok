@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -72,7 +72,12 @@ const SharedMarketProductsModal = ({
     return () => clearTimeout(timer);
   }, [titleInput, categoryInput]);
 
-  useEffect(() => {
+  // Reset filters on close, and apply the caller's initial search on open (or when
+  // it changes while open). Done during render when these inputs change, not in an effect.
+  const openKey = `${open}|${initialSearch ?? ""}|${initialAiMode ? 1 : 0}`;
+  const [appliedOpenKey, setAppliedOpenKey] = useState(null);
+  if (appliedOpenKey !== openKey) {
+    setAppliedOpenKey(openKey);
     if (!open) {
       setTitleInput("");
       setCategoryInput("");
@@ -87,7 +92,7 @@ const SharedMarketProductsModal = ({
         setAiMode(true);
       }
     }
-  }, [open, initialSearch, initialAiMode]);
+  }
 
   const { data: categoryOptions = [] } = useCategories(marketId);
 

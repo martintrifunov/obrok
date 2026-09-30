@@ -2,10 +2,16 @@ import { NotFoundError } from "../../shared/errors/NotFoundError.js";
 import { buildPaginationMeta } from "../../shared/utils/buildPaginationMeta.js";
 
 export class MarketService {
-  constructor(marketRepository, chainRepository, marketProductRepository) {
+  constructor(
+    marketRepository,
+    chainRepository,
+    marketProductRepository,
+    orphanProductService = null,
+  ) {
     this.marketRepository = marketRepository;
     this.chainRepository = chainRepository;
     this.marketProductRepository = marketProductRepository;
+    this.orphanProductService = orphanProductService;
   }
 
   async getAllMarkets({ page, limit, name, chainId }) {
@@ -56,7 +62,9 @@ export class MarketService {
     const market = await this.marketRepository.findById(id);
     if (!market) throw new NotFoundError(`No market matches ID ${id}.`);
 
+    const productIds = await this.marketProductRepository.findProductIdsByMarket(id);
     await this.marketProductRepository.deleteByMarket(id);
     await this.marketRepository.delete(market);
+    await this.orphanProductService?.removeOrphans(productIds);
   }
 }

@@ -8,11 +8,15 @@ export class ChainService {
     imageRepository,
     marketRepository,
     marketProductRepository,
+    imageService = null,
+    orphanProductService = null,
   ) {
     this.chainRepository = chainRepository;
     this.imageRepository = imageRepository;
     this.marketRepository = marketRepository;
     this.marketProductRepository = marketProductRepository;
+    this.imageService = imageService;
+    this.orphanProductService = orphanProductService;
   }
 
   async getAllChains({ page, limit, name }) {
@@ -62,11 +66,17 @@ export class ChainService {
     if (!chain) throw new NotFoundError(`No chain matches ID ${id}.`);
 
     const markets = await this.marketRepository.findByChain(id);
+    const productIds = [];
     for (const market of markets) {
+      productIds.push(
+        ...(await this.marketProductRepository.findProductIdsByMarket(market._id)),
+      );
       await this.marketProductRepository.deleteByMarket(market._id);
       await this.marketRepository.delete(market);
     }
     await this.chainRepository.delete(chain);
+    await this.orphanProductService?.removeOrphans(productIds);
+    await this.imageService?.deleteIfUnused(chain.image?._id ?? chain.image);
   }
 
   async generateReport() {

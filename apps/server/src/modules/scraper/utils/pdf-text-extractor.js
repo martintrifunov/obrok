@@ -9,8 +9,8 @@
 import { inflateSync } from "zlib";
 
 const tryInflate = (buf) => {
-  try { return inflateSync(buf); } catch (_) { /* empty */ }
-  try { return inflateSync(buf.slice(2)); } catch (_) { /* empty */ }
+  try { return inflateSync(buf); } catch { /* try next */ }
+  try { return inflateSync(buf.slice(2)); } catch { /* try next */ }
   return null;
 };
 
@@ -38,6 +38,71 @@ const parseLiteralBytes = (raw) => {
   return out;
 };
 
+// A bfrange covering more codes than this is malformed (or hostile); skip it.
+const MAX_BFRANGE_SPAN = 0x10000;
+
+/**
+ * @param {string} hex
+ * @returns {number[]} UTF-16 code units
+ */
+const hexToCodeUnits = (hex) => {
+  const padded = hex.padStart(Math.ceil(hex.length / 4) * 4, "0");
+  const units = [];
+  for (let i = 0; i < padded.length; i += 4) {
+    units.push(parseInt(padded.slice(i, i + 4), 16));
+  }
+  return units;
+};
+
+const unitsToString = (units) => String.fromCharCode(...units);
+
+/**
+ * @param {string} text decompressed CMap stream
+ * @param {number} keyLen source code length in bytes (from the codespace range)
+ * @returns {Map<string, string>} source code hex (lowercase) -> Unicode string
+ */
+export const parseToUnicodeCMap = (text, keyLen) => {
+  const charMap = new Map();
+  const key = (code) => code.toString(16).padStart(keyLen * 2, "0");
+
+  for (const block of text.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
+    for (const m of block[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]*)>/g)) {
+      if (!m[2]) continue;
+      charMap.set(key(parseInt(m[1], 16)), unitsToString(hexToCodeUnits(m[2])));
+    }
+  }
+
+  for (const block of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
+    for (const m of block[1].matchAll(
+      /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(?:<([0-9a-fA-F]+)>|\[([^\]]*)\])/g,
+    )) {
+      const start = parseInt(m[1], 16);
+      const end = parseInt(m[2], 16);
+      if (end < start || end - start >= MAX_BFRANGE_SPAN) continue;
+
+      if (m[3] !== undefined) {
+        // Hex destination: each successive source code increments the last code unit.
+        const units = hexToCodeUnits(m[3]);
+        const last = units.length - 1;
+        for (let code = start; code <= end; code++) {
+          const next = [...units];
+          next[last] = (units[last] + (code - start)) & 0xffff;
+          charMap.set(key(code), unitsToString(next));
+        }
+      } else {
+        // Array destination: one string per source code, in order.
+        const dsts = [...m[4].matchAll(/<([0-9a-fA-F]*)>/g)].map((d) => d[1]);
+        for (let i = 0; i < dsts.length && start + i <= end; i++) {
+          if (!dsts[i]) continue;
+          charMap.set(key(start + i), unitsToString(hexToCodeUnits(dsts[i])));
+        }
+      }
+    }
+  }
+
+  return charMap;
+};
+
 /**
  * Parse all ToUnicode CMap streams.
  * @returns {Map<string, { keyLen: number, map: Map<string, string> }>}
@@ -55,24 +120,7 @@ const parseCMaps = (decompressedStreams) => {
     const codeSpaceMatch = text.match(/begincodespacerange\s*<([0-9a-fA-F]+)>/);
     const keyLen = codeSpaceMatch ? codeSpaceMatch[1].length / 2 : 1;
 
-    const charMap = new Map();
-
-    for (const block of text.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
-      for (const m of block[1].matchAll(
-        /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g,
-      )) {
-        const start = parseInt(m[1], 16);
-        const end = parseInt(m[2], 16);
-        let dst = parseInt(m[3], 16);
-        for (let code = start; code <= end; code++) {
-          charMap.set(
-            code.toString(16).padStart(keyLen * 2, "0"),
-            String.fromCodePoint(dst++),
-          );
-        }
-      }
-    }
-
+    const charMap = parseToUnicodeCMap(text, keyLen);
     if (charMap.size > 0) result.set(cmapName, { keyLen, map: charMap });
   }
 
@@ -197,7 +245,7 @@ const parseContentItems = (content, fontCMapIndex) => {
 
   const readKeyword = () => {
     let kw = "";
-    while (i < len && !/[\s\t\r\n\f()\[\]{}<>\/]/.test(content[i]))
+    while (i < len && !/[\s\t\r\n\f()[\]{}<>/]/.test(content[i]))
       kw += content[i++];
     return kw;
   };
@@ -215,7 +263,7 @@ const parseContentItems = (content, fontCMapIndex) => {
     if (ch === "/") {
       i++;
       let name = "";
-      while (i < len && !/[\s\t\r\n\f()\[\]{}<>\/]/.test(content[i]))
+      while (i < len && !/[\s\t\r\n\f()[\]{}<>/]/.test(content[i]))
         name += content[i++];
       stack.push({ type: "name", value: name });
       continue;

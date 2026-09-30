@@ -1,13 +1,14 @@
 import mongoose from "mongoose";
-import {
-  buildBilingualRegex,
-  buildBilingualTokenRegexes,
-} from "../../shared/utils/bilingualRegex.js";
+import { buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
 import { buildPaginationMeta } from "../../shared/utils/buildPaginationMeta.js";
 import { ProductModel } from "../product/product.model.js";
 import { MarketProductModel } from "../product/market-product.model.js";
 
 const RRF_K = 60;
+const KEYWORD_LIMIT = 100;
+// Over-fetch before dropping products without prices, so they can't crowd out
+// priced ones in the top results.
+const KEYWORD_OVERFETCH = 500;
 
 const cosineSimilarity = (a, b) => {
   let dot = 0;
@@ -55,19 +56,23 @@ export class SearchService {
       return { data: [], pagination: buildPaginationMeta({ total: 0, page, limit }), priceSort: null };
     }
 
-    // Parse intent to extract clean search terms and price sorting preference
-    const intent = this.intentParserService?.isAvailable()
-      ? await this.intentParserService.parseIntent(q)
-      : { searchTerms: q, priceSort: null, intent: "search", products: [] };
-
-    const searchQuery = intent.searchTerms || q;
-
     await this.analyticsService?.trackFeatureUsage({
       visitorId: analytics?.visitorId,
       userId: analytics?.userId,
       feature: "hybrid-search",
       path: analytics?.path,
     });
+
+    return this.searchProducts({ q, marketId, page, limit });
+  }
+
+  async searchProducts({ q, marketId, page = 1, limit = 10, parseIntent = true }) {
+    // Parse intent to extract clean search terms and price sorting preference
+    const intent = parseIntent && this.intentParserService?.isAvailable()
+      ? await this.intentParserService.parseIntent(q)
+      : { searchTerms: q, priceSort: null, intent: "search", products: [] };
+
+    const searchQuery = intent.searchTerms || q;
 
     const [vectorResults, keywordResults] = await Promise.all([
       this.#vectorSearch(searchQuery, marketId),
@@ -119,7 +124,7 @@ export class SearchService {
         .limit(2000)
         .lean()
         .exec();
-      candidateProductIds = keywordMatches.map((p) => p._id);
+      candidateProductIds = await this.#keepPriced(keywordMatches.map((p) => p._id));
     }
 
     if (candidateProductIds.length === 0) return [];
@@ -160,7 +165,7 @@ export class SearchService {
             "and",
           ),
         },
-        { $limit: 100 },
+        { $limit: KEYWORD_LIMIT },
         { $project: { "product._id": 1 } },
       ];
 
@@ -175,14 +180,24 @@ export class SearchService {
       ...buildFieldMatchClauses(tokenPatterns, ["title", "category"], "and"),
     })
       .select("_id")
-      .limit(100)
+      .limit(KEYWORD_OVERFETCH)
       .lean()
       .exec();
+    const priced = await this.#keepPriced(products.map((p) => p._id));
 
-    return products.map((p, i) => ({
-      productId: p._id.toString(),
+    return priced.slice(0, KEYWORD_LIMIT).map((id, i) => ({
+      productId: id.toString(),
       score: 1 / (i + 1),
     }));
+  }
+
+  async #keepPriced(productIds) {
+    if (!productIds.length) return [];
+    const pricedIds = await MarketProductModel.distinct("product", {
+      product: { $in: productIds },
+    });
+    const priced = new Set(pricedIds.map((id) => id.toString()));
+    return productIds.filter((id) => priced.has(id.toString()));
   }
 
   #rrfMerge(vectorResults, keywordResults) {

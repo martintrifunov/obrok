@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Marker } from "react-map-gl/maplibre";
 import { useMap } from "react-map-gl/maplibre";
 import UserDot from "@/features/map/components/UserDot";
@@ -147,6 +147,8 @@ const LocateUser = ({
 
       if (highAccuracy) {
         manualFallbackTimerRef.current = setTimeout(() => {
+          // Recursive call from an async callback, after startWatching is initialized.
+          // eslint-disable-next-line react-hooks/immutability
           startWatching(false);
         }, HIGH_ACCURACY_MAX_WAIT);
       }

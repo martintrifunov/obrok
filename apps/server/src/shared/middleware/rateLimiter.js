@@ -26,3 +26,10 @@ export const loginLimiter = createRateLimiter({
   max: 10,
   message: "Too many login attempts. Please try again after 15 minutes.",
 });
+
+// Smart search calls a paid AI model per request, so keep it tight per IP.
+export const smartSearchLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: "Too many smart search requests. Please try again in a minute.",
+});

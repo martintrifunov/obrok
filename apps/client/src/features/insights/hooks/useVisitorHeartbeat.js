@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { fetchPublic } from "@/api/fetch";
+import { useAuthStore } from "@/store/authStore";
 
 const HEARTBEAT_INTERVAL_MS = 60 * 1000;
 
@@ -14,9 +15,13 @@ export default function useVisitorHeartbeat() {
 
   const sendHeartbeat = useCallback(async ({ path, isPageView = false }) => {
     try {
+      // Public endpoint, but send the token when logged in so the server can
+      // attribute the visit to the user (optionalVerifyJWT).
+      const token = useAuthStore.getState().auth?.accessToken;
       await fetchPublic("/analytics/heartbeat", {
         method: "POST",
         body: JSON.stringify({ path, isPageView }),
+        ...(token && { headers: { Authorization: `Bearer ${token}` } }),
       });
     } catch {
       // Analytics should never block UX.

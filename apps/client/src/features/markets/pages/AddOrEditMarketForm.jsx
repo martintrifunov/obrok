@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Button,
   TextField,
@@ -18,6 +18,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 import { useNavigate, useParams } from "react-router-dom";
 import GlobalLoadingProgress from "@/components/ui/GlobalLoadingProgress";
+import useInitFromData from "@/hooks/useInitFromData";
 import {
   useMarket,
   useSaveMarket,
@@ -42,16 +43,12 @@ const AddOrEditMarketForm = () => {
 
   const saveMutation = useSaveMarket(isEditMode, params.marketId);
 
-  useEffect(() => {
-    if (fetchedMarket) {
-      setMarket(fetchedMarket);
-      if (fetchedMarket.chain) {
-        setSelectedChainId(
-          fetchedMarket.chain._id || fetchedMarket.chain,
-        );
-      }
+  useInitFromData(fetchedMarket, (data) => {
+    setMarket(data);
+    if (data.chain) {
+      setSelectedChainId(data.chain._id || data.chain);
     }
-  }, [fetchedMarket]);
+  });
 
   const handleChange = (event) => {
     const { name, value } = event.target;

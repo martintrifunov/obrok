@@ -36,6 +36,7 @@ services:
   osrm:
     container_name: obrok_osrm
     image: osrm/osrm-backend
+    restart: unless-stopped
     volumes:
       - ./data/map:/data
     command: osrm-routed --algorithm mld --port 5001 /data/macedonia-latest.osrm
@@ -48,12 +49,15 @@ services:
       context: ./apps/server
       dockerfile: Dockerfile.prod
     restart: always
+    # Forwards SIGTERM to node (not PID 1) so graceful shutdown runs on deploys.
+    init: true
     env_file:
       - .env
     environment:
       NODE_ENV: production
     volumes:
       - ./apps/server/src/uploads:/app/src/uploads
+      - obrok_reports:/app/src/data/reports
     depends_on:
       db:
         condition: service_healthy
@@ -87,3 +91,4 @@ networks:
 
 volumes:
   obrok_db:
+  obrok_reports:

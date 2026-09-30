@@ -10,14 +10,17 @@ const mockMarketRepository = {
   findByName: vi.fn(),
   create: vi.fn(),
   save: vi.fn(),
+  findScrapedIds: vi.fn().mockResolvedValue([]),
 };
 
 const mockProductRepository = {
   bulkUpsertProducts: vi.fn(),
+  findAdminEditedIds: vi.fn().mockResolvedValue([]),
 };
 
 const mockMarketProductRepository = {
   bulkUpsert: vi.fn(),
+  backfillLastSeen: vi.fn().mockResolvedValue({ stamped: 0, adminOwned: 0 }),
 };
 
 const mockImageRepository = {

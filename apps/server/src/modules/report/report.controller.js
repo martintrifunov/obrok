@@ -39,8 +39,13 @@ export class ReportController {
       if (!res.headersSent) res.sendStatus(500);
       else res.destroy();
     });
-    stream.on("close", () => {
+    // Only a fully sent file is deleted; an aborted download keeps it so the
+    // client can retry. Leftovers are removed by ReportService.cleanupStaleReports.
+    res.on("finish", () => {
       unlink(filePath).catch(() => {});
+    });
+    res.on("close", () => {
+      if (!res.writableFinished) stream.destroy();
     });
     stream.pipe(res);
   };

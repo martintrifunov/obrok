@@ -1,5 +1,6 @@
 import { BaseScraper } from "./base.scraper.js";
 import { extractProductsFromTable } from "../utils/table-evaluate.js";
+import { withParsedPrices } from "../utils/parsePrice.js";
 
 const INDEX_URL = "https://ramstore.com.mk/marketi/";
 const NAV_TIMEOUT_MS = Number.parseInt(
@@ -28,6 +29,10 @@ export class RamstoreScraper extends BaseScraper {
     return "Македонија";
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
+   */
   async fetchMarkets(page) {
     await page.goto(INDEX_URL, { waitUntil: "domcontentloaded" });
 
@@ -83,6 +88,12 @@ export class RamstoreScraper extends BaseScraper {
     return BaseScraper.deduplicateByName(entries);
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @param {string} storeUrl
+   * @param {Date | null} [previousUpdateString]
+   * @returns {Promise<import('./base.scraper.js').FetchProductsResult>}
+   */
   async fetchProducts(page, storeUrl, previousUpdateString) {
     const allProducts = [];
 
@@ -123,6 +134,7 @@ export class RamstoreScraper extends BaseScraper {
         );
         pageUpdateString = await this.#readUpdateString(page);
       } catch {
+        // Update text never appeared; keep the value read before waiting.
       }
     }
 
@@ -136,11 +148,11 @@ export class RamstoreScraper extends BaseScraper {
       const table = document.querySelector("table.dataTable, table");
       if (!table) return { supported: false, products: [] };
 
-      const hasJQuery = typeof window.jQuery !== "undefined";
-      const hasDataTable = hasJQuery && !!window.jQuery.fn?.DataTable;
+      const jQuery = /** @type {any} */ (window).jQuery;
+      const hasDataTable = !!jQuery?.fn?.DataTable;
       if (!hasDataTable) return { supported: false, products: [] };
 
-      const dt = window.jQuery(table).DataTable();
+      const dt = jQuery(table).DataTable();
       if (!dt) return { supported: false, products: [] };
 
       const headerRow = table.querySelector("thead tr, tr:first-child");
@@ -185,11 +197,8 @@ export class RamstoreScraper extends BaseScraper {
           continue;
         }
 
-        const rawPrice = asText(cells[colPrice])
-          .replace(",", ".")
-          .replace(/[^\d.]/g, "");
-        const price = Number.parseFloat(rawPrice);
-        if (Number.isNaN(price) || price <= 0) continue;
+        const priceText = asText(cells[colPrice]);
+        if (!priceText) continue;
 
         const title = asText(cells[colTitle]);
         if (!title) continue;
@@ -197,7 +206,7 @@ export class RamstoreScraper extends BaseScraper {
         const category =
           colCategory !== -1 ? asText(cells[colCategory]) || "Општо" : "Општо";
 
-        products.push({ title, price, category });
+        products.push({ title, priceText, category });
       }
 
       return { supported: true, products };
@@ -206,7 +215,7 @@ export class RamstoreScraper extends BaseScraper {
     if (fastPath.supported) {
       // Keep the latest seen price per title to avoid unnecessary duplicate writes.
       const latestByTitle = new Map();
-      for (const p of fastPath.products) {
+      for (const p of withParsedPrices(fastPath.products)) {
         latestByTitle.set(p.title, p);
       }
       allProducts.push(...latestByTitle.values());
@@ -219,7 +228,9 @@ export class RamstoreScraper extends BaseScraper {
     }
 
     await page.evaluate(() => {
-      const select = document.querySelector('select[name$="_length"]');
+      const select = /** @type {HTMLSelectElement | null} */ (
+        document.querySelector('select[name$="_length"]')
+      );
       if (select) {
         select.value = "100";
         select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -232,16 +243,20 @@ export class RamstoreScraper extends BaseScraper {
     let pageCount = 1;
 
     while (hasNextPage) {
-      const products = await page.evaluate(
-        extractProductsFromTable,
-        { tableSelector: "table.dataTable, table" },
+      const products = withParsedPrices(
+        await page.evaluate(extractProductsFromTable, {
+          tableSelector: "table.dataTable, table",
+        }),
       );
 
       const paginationState = await page.evaluate(() => {
         const nextBtn = document.querySelector(".paginate_button.next");
         return {
           hasNextBtn: nextBtn && !nextBtn.classList.contains("disabled"),
-          info: document.querySelector(".dataTables_info")?.innerText || "",
+          info:
+            /** @type {HTMLElement | null} */ (
+              document.querySelector(".dataTables_info")
+            )?.innerText || "",
         };
       });
 
@@ -251,14 +266,18 @@ export class RamstoreScraper extends BaseScraper {
       if (hasNextPage) {
         await page.evaluate((oldInfo, maxWaitMs) => {
           return new Promise((resolve) => {
-            document.querySelector(".paginate_button.next").click();
+            /** @type {HTMLElement} */ (
+              document.querySelector(".paginate_button.next")
+            ).click();
             const startedAt = Date.now();
             const check = setInterval(() => {
               const newInfo =
-                document.querySelector(".dataTables_info")?.innerText || "";
+                /** @type {HTMLElement | null} */ (
+                  document.querySelector(".dataTables_info")
+                )?.innerText || "";
               if (newInfo !== oldInfo || Date.now() - startedAt > maxWaitMs) {
                 clearInterval(check);
-                resolve();
+                resolve(undefined);
               }
             }, 50);
           });

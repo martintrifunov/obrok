@@ -53,6 +53,9 @@ export class IntentParserService {
     }
 
     const result = await this.#parseWithRetry(query);
+    // Don't cache the fallback: a transient AI outage would otherwise pin this
+    // query to a plain search for the whole cache window.
+    if (!result) return this.#fallback(query);
 
     this.cache.set(cacheKey, { value: result, ts: Date.now() });
     if (this.cache.size > 500) {
@@ -77,7 +80,7 @@ export class IntentParserService {
       }
     }
 
-    return this.#fallback(query);
+    return null;
   }
 
   async #parseWithRetryForModel(query, model, maxRetries) {
@@ -132,7 +135,7 @@ export class IntentParserService {
           ? parsed.intent
           : "search",
       products: Array.isArray(parsed.products)
-        ? parsed.products.filter((p) => typeof p === "string" && p.trim())
+        ? [...new Set(parsed.products.filter((p) => typeof p === "string" && p.trim()).map((p) => p.trim()))]
         : [],
     };
   }

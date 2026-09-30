@@ -38,8 +38,8 @@ stateDiagram-v2
 
 | Path | Relevance |
 |------|-----------|
-| `apps/server/src/modules/scraper/scraper.cron.js` | Scraper schedule (Mon/Thu 03:00) |
-| `apps/server/src/modules/analytics/analytics.cron.js` | Analytics cleanup (daily 02:30) |
+| `apps/server/src/modules/scraper/scraper.cron.js` | Scraper schedule (Mon/Thu 03:00 Europe/Skopje) |
+| `apps/server/src/modules/analytics/analytics.cron.js` | Analytics cleanup (daily 02:30 Europe/Skopje) |
 | `apps/server/src/modules/report/report.service.js` | Job orchestration and CSV generation |
 | `apps/server/src/modules/report/report.controller.js` | HTTP job lifecycle endpoints |
 

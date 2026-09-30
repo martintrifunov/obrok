@@ -139,6 +139,8 @@ export function useSmartSearch({ q, lat, lon, budgetOnly }, options = {}) {
         body: JSON.stringify({ q, lat, lon, budgetOnly }),
       }),
     enabled: !!q && (options.enabled ?? true),
+    // Retrying a rate-limited request only burns more of the limit.
+    retry: (failureCount, error) => error?.status !== 429 && failureCount < 1,
     refetchOnWindowFocus: options.refetchOnWindowFocus ?? false,
   });
 }

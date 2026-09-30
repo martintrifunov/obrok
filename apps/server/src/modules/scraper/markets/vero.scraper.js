@@ -1,5 +1,6 @@
 import { BaseScraper } from "./base.scraper.js";
 import { extractProductsFromTable } from "../utils/table-evaluate.js";
+import { withParsedPrices } from "../utils/parsePrice.js";
 
 const INDEX_URL = "https://pricelist.vero.com.mk/";
 
@@ -16,6 +17,10 @@ export class VeroScraper extends BaseScraper {
     return "Македонија";
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
+   */
   async fetchMarkets(page) {
     await page.goto(INDEX_URL, { waitUntil: "domcontentloaded" });
 
@@ -49,6 +54,12 @@ export class VeroScraper extends BaseScraper {
     return BaseScraper.deduplicateByName(entries);
   }
 
+  /**
+   * @param {import('puppeteer').Page} page
+   * @param {string} storeUrl
+   * @param {Date | null} [previousUpdateString]
+   * @returns {Promise<import('./base.scraper.js').FetchProductsResult>}
+   */
   async fetchProducts(page, storeUrl, previousUpdateString) {
     const allProducts = [];
     let currentUrl = storeUrl;
@@ -73,7 +84,9 @@ export class VeroScraper extends BaseScraper {
         isFirstPage = false;
       }
 
-      const pageProducts = await page.evaluate(extractProductsFromTable);
+      const pageProducts = withParsedPrices(
+        await page.evaluate(extractProductsFromTable),
+      );
 
       allProducts.push(...pageProducts);
 
@@ -85,7 +98,11 @@ export class VeroScraper extends BaseScraper {
         const nextPage = parseInt(match[2], 10) + 1;
         const nextHref = `${storeId}_${nextPage}.html`;
 
-        const link = Array.from(document.querySelectorAll("a[href]")).find(
+        const link = Array.from(
+          /** @type {NodeListOf<HTMLAnchorElement>} */ (
+            document.querySelectorAll("a[href]")
+          ),
+        ).find(
           (a) => a.getAttribute("href") === nextHref,
         );
 

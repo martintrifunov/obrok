@@ -11,7 +11,8 @@ RUN apk add --no-cache \
     ttf-freefont \
     udev
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+# Use the Alpine Chromium below; Puppeteer 24 reads PUPPETEER_SKIP_DOWNLOAD (the old name is ignored).
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY package.json package-lock.json ./
@@ -19,6 +20,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY --chown=node:node . .
+
+# Mount point for the reports volume; must be owned by node so the volume inherits it.
+RUN mkdir -p src/data/reports && chown node:node src/data/reports
 
 EXPOSE 5000
 

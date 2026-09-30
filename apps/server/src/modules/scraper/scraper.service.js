@@ -14,6 +14,10 @@ const PROTOCOL_TIMEOUT_MS = Number.parseInt(
   10,
 );
 
+// A store that suddenly lists far fewer products than before is more likely a
+// broken parser or layout change than a real delisting, so don't delete then.
+const MIN_RETAINED_RATIO = 0.5;
+
 const isTransientScrapeError = (err) => {
   const message = err?.message ?? "";
   return (
@@ -31,9 +35,7 @@ export class ScraperService {
     marketProductRepository,
     imageRepository,
     geocoderService,
-    embeddingService,
-    productEmbeddingRepository,
-    featureFlagService,
+    orphanProductService = null,
   ) {
     this.chainRepository = chainRepository;
     this.marketRepository = marketRepository;
@@ -41,10 +43,90 @@ export class ScraperService {
     this.marketProductRepository = marketProductRepository;
     this.imageRepository = imageRepository;
     this.geocoderService = geocoderService;
+    this.orphanProductService = orphanProductService;
+    this.legacyPriceRowsBackfilled = false;
+    this.orphanProductsSwept = false;
+  }
+
+  async sweepOrphanProducts() {
+    if (this.orphanProductsSwept || !this.orphanProductService) return;
+
+    const removed = await this.orphanProductService.sweep();
+    if (removed) {
+      console.log(`[ScraperService] Removed ${removed} products with no prices left.`);
+    }
+    this.orphanProductsSwept = true;
+  }
+
+  async #removeOrphanProducts(name, candidates) {
+    if (!this.orphanProductService || !candidates.size) return;
+    try {
+      const removed = await this.orphanProductService.removeOrphans(candidates);
+      if (removed) {
+        console.log(`[Scraper] 🧹 [${name}] Removed ${removed} products no store sells anymore.`);
+      }
+    } catch (err) {
+      console.error(`[Scraper] [${name}] Orphan product cleanup failed:`, err.message);
+    }
+  }
+
+  async backfillLegacyPriceRows() {
+    if (this.legacyPriceRowsBackfilled) return;
+
+    const [scrapedMarketIds, adminProductIds] = await Promise.all([
+      this.marketRepository.findScrapedIds(),
+      this.productRepository.findAdminEditedIds(),
+    ]);
+    const { stamped, adminOwned } = await this.marketProductRepository.backfillLastSeen({
+      scrapedMarketIds,
+      adminProductIds,
+    });
+    if (stamped || adminOwned) {
+      console.log(
+        `[ScraperService] Backfilled lastSeenAt: ${stamped} scraper-owned, ${adminOwned} admin-owned price rows.`,
+      );
+    }
+    this.legacyPriceRowsBackfilled = true;
+  }
+
+  async #removeStalePrices({
+    name,
+    marketDoc,
+    seenCount,
+    previousCount,
+    seenAt,
+    complete,
+    orphanCandidates,
+  }) {
+    if (!complete) {
+      console.warn(`[Scraper] ⚠️  [${name}] Incomplete scrape; keeping unseen prices.`);
+      return;
+    }
+    if (previousCount > 0 && seenCount < previousCount * MIN_RETAINED_RATIO) {
+      console.warn(
+        `[Scraper] ⚠️  [${name}] Saw ${seenCount} products, down from ${previousCount} last scrape; keeping unseen prices in case the scrape is broken.`,
+      );
+      return;
+    }
+
+    const unseenProducts = await this.marketProductRepository.findUnseenProductIds(
+      marketDoc._id,
+      seenAt,
+    );
+    const { deletedCount } = await this.marketProductRepository.deleteUnseenSince(
+      marketDoc._id,
+      seenAt,
+    );
+    unseenProducts.forEach((id) => orphanCandidates.add(id));
+    if (deletedCount) {
+      console.log(`[Scraper] 🧹 [${name}] Removed ${deletedCount} delisted or unavailable prices.`);
+    }
   }
 
   async runForMarket(scraper) {
     const startTime = performance.now();
+    await this.backfillLegacyPriceRows();
+    await this.sweepOrphanProducts();
     console.log(`\n[ScraperService] 🚀 Starting ${scraper.constructor.name}`);
     console.log(
       `[ScraperService] Settings: concurrency=${CONCURRENT_TABS}, navTimeout=${NAV_TIMEOUT_MS}ms, protocolTimeout=${PROTOCOL_TIMEOUT_MS}ms`,
@@ -79,6 +161,11 @@ export class ScraperService {
       ],
     });
 
+    // Products that lost a price this run. Removed only after every store of the
+    // chain is done: tabs run in parallel, and another store may be about to
+    // price a product that looks unpriced mid-run.
+    const orphanCandidates = new Set();
+
     try {
       const setupPage = await browser.newPage();
       await this.#optimizePage(setupPage);
@@ -103,11 +190,14 @@ export class ScraperService {
       for (let i = 0; i < readyMarkets.length; i += CONCURRENT_TABS) {
         const batch = readyMarkets.slice(i, i + CONCURRENT_TABS);
         await Promise.all(
-          batch.map((m) => this.#scrapeAndSaveStore(m, scraper, browser)),
+          batch.map((m) =>
+            this.#scrapeAndSaveStore(m, scraper, browser, orphanCandidates),
+          ),
         );
       }
     } finally {
       await browser.close();
+      await this.#removeOrphanProducts(scraper.chainName, orphanCandidates);
       const duration = ((performance.now() - startTime) / 1000).toFixed(2);
       console.log(
         `\n[ScraperService] ✅ Finished ${scraper.constructor.name} in ${duration}s`,
@@ -163,13 +253,17 @@ export class ScraperService {
     });
   }
 
-  async #scrapeAndSaveStore(marketData, scraper, browser) {
+  async #scrapeAndSaveStore(marketData, scraper, browser, orphanCandidates) {
     const { name, pricelistUrl, marketDoc } = marketData;
     const tabStartTime = performance.now();
-    let page = await browser.newPage();
-    await this.#optimizePage(page);
+    let page = null;
 
+    // Everything per store stays inside the try: a crashed tab (newPage, setup,
+    // or close failing) must only skip this store, not reject the whole batch.
     try {
+      page = await browser.newPage();
+      await this.#optimizePage(page);
+
       let result;
       let lastError;
 
@@ -233,7 +327,20 @@ export class ScraperService {
           price,
         }));
 
-      await this.marketProductRepository.bulkUpsert(marketProducts);
+      const seenAt = new Date();
+      const previousCount = await this.marketProductRepository.countSeenInLatestScrape(
+        marketDoc._id,
+      );
+      await this.marketProductRepository.bulkUpsert(marketProducts, { seenAt });
+      await this.#removeStalePrices({
+        name,
+        marketDoc,
+        seenCount: marketProducts.length,
+        previousCount,
+        seenAt,
+        complete: result.complete !== false,
+        orphanCandidates,
+      });
 
       if (result.newUpdateDate) {
         marketDoc.lastScrapedUpdate = result.newUpdateDate;
@@ -249,7 +356,7 @@ export class ScraperService {
     } catch (err) {
       console.error(`[ScraperService] Error in [${name}]:`, err.message);
     } finally {
-      await page.close();
+      await page?.close().catch(() => {});
     }
   }
 

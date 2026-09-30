@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { smartSearchController } from "../../container.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
+import { smartSearchLimiter } from "../../shared/middleware/rateLimiter.js";
 import optionalVerifyJWT from "../auth/middleware/optionalVerifyJWT.js";
 import {
   smartSearchQuerySchema,
@@ -18,6 +19,7 @@ router.get(
 
 router.post(
   "/",
+  smartSearchLimiter,
   optionalVerifyJWT,
   validateRequest(smartSearchQuerySchema, "body"),
   smartSearchController.search,

@@ -41,7 +41,7 @@ Coordinates are stored as `[latitude, longitude]`, not GeoJSON's `[lon, lat]` or
 
 ### Cascade Delete
 
-Deleting a market removes all **MarketProduct** junction records for that market.
+Deleting a market removes all **MarketProduct** junction records for that market, then any **Products** left with no price in any market, with their embeddings, unless an admin edited them (description or image). See [orphaned products](./scraper.md#orphaned-products).
 
 ## Source Anchors
 

@@ -7,12 +7,56 @@ import { AppError } from "../../shared/errors/AppError.js";
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 const REPORTS_DIR = path.resolve("src/data/reports");
+// Reports are deleted after a complete download; this catches ones never downloaded.
+const STALE_REPORT_MS = 24 * 60 * 60 * 1000;
+
+const { PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, ABORTED } = ReportJobStatus;
+const ACTIVE_STATUSES = [PENDING, PROCESSING];
 
 export class ReportService {
-  constructor(reportJobRepository, marketRepository) {
+  constructor(
+    reportJobRepository,
+    marketRepository,
+    { reportsDir = REPORTS_DIR, timeoutMs = TIMEOUT_MS } = {},
+  ) {
     this.reportJobRepository = reportJobRepository;
     this.marketRepository = marketRepository;
+    this.reportsDir = reportsDir;
+    this.timeoutMs = timeoutMs;
     this.activeJobs = new Map();
+  }
+
+  async cleanupStaleReports(maxAgeMs = STALE_REPORT_MS) {
+    let entries;
+    try {
+      entries = await fs.readdir(this.reportsDir);
+    } catch {
+      return 0;
+    }
+
+    const cutoff = Date.now() - maxAgeMs;
+    let removed = 0;
+    for (const name of entries) {
+      if (!/^report-.*\.csv$/.test(name)) continue;
+      const filePath = path.join(this.reportsDir, name);
+      try {
+        const { mtimeMs } = await fs.stat(filePath);
+        if (mtimeMs < cutoff) {
+          await fs.unlink(filePath);
+          removed++;
+        }
+      } catch {
+        // Already gone or unreadable; skip.
+      }
+    }
+    return removed;
+  }
+
+  async abortInterruptedJobs() {
+    const result = await this.reportJobRepository.abortInterrupted(
+      "Interrupted by a server restart.",
+    );
+    return result.modifiedCount ?? 0;
   }
 
   async createJob(userId, filters) {
@@ -24,10 +68,11 @@ export class ReportService {
     const job = await this.reportJobRepository.create({
       requestedBy: userId,
       filters,
-      status: ReportJobStatus.PENDING,
+      status: PENDING,
     });
 
     this.#processJob(job._id, filters);
+    this.cleanupStaleReports().catch(() => {});
 
     return { jobId: job._id, status: job.status, filters };
   }
@@ -47,32 +92,34 @@ export class ReportService {
   }
 
   async cancelJob(jobId, userId) {
-    const job = await this.reportJobRepository.findByIdAndUser(jobId, userId);
-    if (!job) throw new NotFoundError("Report job not found.");
+    const cancelled = await this.reportJobRepository.transition(
+      jobId,
+      ACTIVE_STATUSES,
+      { status: CANCELLED, finishedAt: new Date() },
+      { requestedBy: userId },
+    );
 
-    const terminalStatuses = [ReportJobStatus.COMPLETED, ReportJobStatus.FAILED, ReportJobStatus.CANCELLED, ReportJobStatus.ABORTED];
-    if (terminalStatuses.includes(job.status)) {
+    if (!cancelled) {
+      const job = await this.reportJobRepository.findByIdAndUser(jobId, userId);
+      if (!job) throw new NotFoundError("Report job not found.");
       throw new AppError(`Cannot cancel a job with status ${job.status}.`, 409);
     }
 
-    this.activeJobs.set(jobId.toString(), { cancelled: true });
+    const state = this.activeJobs.get(jobId.toString());
+    if (state) state.cancelled = true;
 
-    job.status = ReportJobStatus.CANCELLED;
-    job.finishedAt = new Date();
-    await this.reportJobRepository.save(job);
-
-    return { jobId: job._id, status: job.status };
+    return { jobId: cancelled._id, status: cancelled.status };
   }
 
   async downloadReport(jobId, userId) {
     const job = await this.reportJobRepository.findByIdAndUser(jobId, userId);
     if (!job) throw new NotFoundError("Report job not found.");
 
-    if (job.status !== ReportJobStatus.COMPLETED) {
+    if (job.status !== COMPLETED) {
       throw new AppError(`Report is not ready. Current status: ${job.status}.`, 409);
     }
 
-    const filePath = path.join(REPORTS_DIR, job.artifact);
+    const filePath = path.join(this.reportsDir, job.artifact);
     try {
       await fs.access(filePath);
     } catch {
@@ -85,73 +132,56 @@ export class ReportService {
   async #processJob(jobId, filters) {
     const jobIdStr = jobId.toString();
     this.activeJobs.set(jobIdStr, { cancelled: false });
+    const filePath = path.join(this.reportsDir, `report-${jobIdStr}.csv`);
 
+    // Every status change is conditional on the job still being active, so a
+    // cancel or timeout that lands mid-run is never overwritten.
     const timeoutId = setTimeout(async () => {
-      try {
-        const job = await this.reportJobRepository.findById(jobId);
-        if (job && (job.status === ReportJobStatus.PENDING || job.status === ReportJobStatus.PROCESSING)) {
-          job.status = ReportJobStatus.ABORTED;
-          job.error = "Report generation timed out.";
-          job.finishedAt = new Date();
-          await this.reportJobRepository.save(job);
-        }
-      } catch { /* timeout cleanup failure */ }
-      this.activeJobs.delete(jobIdStr);
-    }, TIMEOUT_MS);
+      const state = this.activeJobs.get(jobIdStr);
+      if (state) state.cancelled = true;
+      await this.reportJobRepository
+        .transition(jobId, ACTIVE_STATUSES, {
+          status: ABORTED,
+          error: "Report generation timed out.",
+          finishedAt: new Date(),
+        })
+        .catch(() => {});
+    }, this.timeoutMs);
 
     try {
-      const job = await this.reportJobRepository.findById(jobId);
-      if (!job || job.status === ReportJobStatus.CANCELLED) {
-        return;
-      }
-
-      job.status = ReportJobStatus.PROCESSING;
-      job.startedAt = new Date();
-      await this.reportJobRepository.save(job);
-
-      if (this.#isCancelled(jobIdStr)) {
-        return;
-      }
+      const started = await this.reportJobRepository.transition(jobId, [PENDING], {
+        status: PROCESSING,
+        startedAt: new Date(),
+      });
+      if (!started) return;
 
       const marketsData = await this.marketRepository.findAllForReport(filters);
-
-      if (this.#isCancelled(jobIdStr)) {
-        return;
-      }
+      if (this.#isCancelled(jobIdStr)) return;
 
       const csv = this.#buildCsv(marketsData);
+      if (this.#isCancelled(jobIdStr)) return;
 
-      if (this.#isCancelled(jobIdStr)) {
-        return;
-      }
-
-      await fs.mkdir(REPORTS_DIR, { recursive: true });
-      const fileName = `report-${jobIdStr}.csv`;
-      const filePath = path.join(REPORTS_DIR, fileName);
+      await fs.mkdir(this.reportsDir, { recursive: true });
       await fs.writeFile(filePath, csv, "utf-8");
 
-      const freshJob = await this.reportJobRepository.findById(jobId);
-      if (!freshJob || freshJob.status === ReportJobStatus.CANCELLED || freshJob.status === ReportJobStatus.ABORTED) {
+      const completed = await this.reportJobRepository.transition(jobId, [PROCESSING], {
+        status: COMPLETED,
+        artifact: path.basename(filePath),
+        finishedAt: new Date(),
+      });
+      if (!completed) {
+        // Cancelled or timed out while writing.
         await fs.unlink(filePath).catch(() => {});
-        return;
       }
-
-      freshJob.status = ReportJobStatus.COMPLETED;
-      freshJob.artifact = fileName;
-      freshJob.finishedAt = new Date();
-      await this.reportJobRepository.save(freshJob);
     } catch (err) {
-      const orphanPath = path.join(REPORTS_DIR, `report-${jobIdStr}.csv`);
-      await fs.unlink(orphanPath).catch(() => {});
-      try {
-        const job = await this.reportJobRepository.findById(jobId);
-        if (job && job.status !== ReportJobStatus.CANCELLED && job.status !== ReportJobStatus.ABORTED) {
-          job.status = ReportJobStatus.FAILED;
-          job.error = err.message || "Unknown error during report generation.";
-          job.finishedAt = new Date();
-          await this.reportJobRepository.save(job);
-        }
-      } catch { /* failure during error handling */ }
+      await fs.unlink(filePath).catch(() => {});
+      await this.reportJobRepository
+        .transition(jobId, ACTIVE_STATUSES, {
+          status: FAILED,
+          error: err.message || "Unknown error during report generation.",
+          finishedAt: new Date(),
+        })
+        .catch(() => {});
     } finally {
       clearTimeout(timeoutId);
       this.activeJobs.delete(jobIdStr);

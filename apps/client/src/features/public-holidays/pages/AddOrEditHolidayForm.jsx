@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Button,
   TextField,
@@ -12,6 +12,7 @@ import { useTheme } from "@mui/material/styles";
 import SaveIcon from "@mui/icons-material/Save";
 import { useNavigate, useParams } from "react-router-dom";
 import GlobalLoadingProgress from "@/components/ui/GlobalLoadingProgress";
+import useInitFromData from "@/hooks/useInitFromData";
 import {
   useHoliday,
   useSaveHoliday,
@@ -36,14 +37,12 @@ const AddOrEditHolidayForm = () => {
 
   const saveMutation = useSaveHoliday(isEditMode, params.holidayId);
 
-  useEffect(() => {
-    if (fetchedHoliday) {
-      setHoliday({
-        name: fetchedHoliday.name || "",
-        date: fetchedHoliday.date ? fetchedHoliday.date.slice(0, 10) : "",
-      });
-    }
-  }, [fetchedHoliday]);
+  useInitFromData(fetchedHoliday, (data) => {
+    setHoliday({
+      name: data.name || "",
+      date: data.date ? data.date.slice(0, 10) : "",
+    });
+  });
 
   const handleChange = (event) => {
     const { name, value } = event.target;

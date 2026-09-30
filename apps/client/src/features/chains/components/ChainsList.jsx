@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   Typography,
   Table,
@@ -22,6 +22,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useNavigate, useLocation } from "react-router-dom";
 import useDebounce from "@/hooks/useDebounce";
+import useResettablePage from "@/hooks/useResettablePage";
 import ImagePreviewModal from "@/components/ui/ImagePreviewModal";
 import { BASE_URL } from "@/api/consts";
 import {
@@ -35,14 +36,10 @@ const ChainsList = ({ searchTerm }) => {
   const location = useLocation();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const [page, setPage] = useState(0);
   const rowsPerPage = 5;
 
   const debouncedSearch = useDebounce(searchTerm);
-
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedSearch]);
+  const [page, setPage] = useResettablePage(debouncedSearch);
 
   const {
     data: responseData,
@@ -72,7 +69,12 @@ const ChainsList = ({ searchTerm }) => {
         "Are you sure you want to remove this chain?\nThis WILL REMOVE all of its price listings as well.",
       )
     ) {
-      deleteMutation.mutate(chainId);
+      deleteMutation.mutate(chainId, {
+        // Step back when the last row on a page is removed so it isn't left empty.
+        onSuccess: () => {
+          if (chains.length === 1 && page > 0) setPage(page - 1);
+        },
+      });
     }
   };
 
@@ -83,6 +85,7 @@ const ChainsList = ({ searchTerm }) => {
       )}
 
       {isSmallScreen ? (
+        <>
         <Stack spacing={2} sx={{ width: "100%" }}>
           {!isLoading
             ? chains.map((chain) => (
@@ -156,6 +159,15 @@ const ChainsList = ({ searchTerm }) => {
                   />
                 ))}
         </Stack>
+        <TablePagination
+          component="div"
+          count={totalChains}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[]}
+        />
+        </>
       ) : (
         <ChainsTableContainer>
           <Table sx={{ minWidth: 600 }}>

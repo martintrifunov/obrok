@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import CakeIcon from "@mui/icons-material/Cake";
 import SetMealIcon from "@mui/icons-material/SetMeal";
 import EggIcon from "@mui/icons-material/Egg";
@@ -22,7 +23,7 @@ import FaceIcon from "@mui/icons-material/Face";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SmokingRoomsIcon from "@mui/icons-material/SmokingRooms";
 import EditIcon from "@mui/icons-material/Edit";
-import CategoryIcon from "@mui/icons-material/Category";
+import CategoryDefaultIcon from "@mui/icons-material/Category";
 import PetsIcon from "@mui/icons-material/Pets";
 import KitchenIcon from "@mui/icons-material/Kitchen";
 import LocalPharmacyIcon from "@mui/icons-material/LocalPharmacy";
@@ -125,7 +126,7 @@ const SUB_CATEGORY_MAP = [
   { keywords: ["кеса", "кеси", "флаша", "шише"], icon: ShoppingBagIcon },
 ];
 
-const FALLBACK_ICON = CategoryIcon;
+const FALLBACK_ICON = CategoryDefaultIcon;
 
 export const getCategoryIcon = (category) => {
   if (!category) return FALLBACK_ICON;
@@ -157,5 +158,8 @@ export const getCategoryIcon = (category) => {
 
   return FALLBACK_ICON;
 };
+
+export const CategoryIcon = ({ category, ...props }) =>
+  createElement(getCategoryIcon(category), props);
 
 export default getCategoryIcon;

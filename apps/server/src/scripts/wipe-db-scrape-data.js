@@ -14,7 +14,6 @@ const CHAIN_NAME_MAP = {
   stokomak: "Stokomak",
   kam: "KAM",
   superkitgo: "Super KIT-GO",
-  kipper: "Kipper",
 };
 
 const COLLECTIONS_TO_WIPE = [
