@@ -97,6 +97,10 @@ See [Geolocation](/concepts/geolocation) for why the static tier exists and its 
 
 KAM publishes each store's pricelist as a PDF, read by the dependency-free `utils/pdf-text-extractor.js`. Glyph codes are mapped to Unicode through each font's ToUnicode CMap, supporting `bfchar`, `bfrange` with hex destinations (the last UTF-16 code unit increments per code) and `bfrange` with array destinations. Destinations are decoded as UTF-16BE, so ligatures (`<00660069>` = "fi") and surrogate pairs work. Malformed entries are skipped instead of failing the store.
 
+### KAM Pricelist Rows
+
+Columns are found from the header labels (Назив производ, Продажна, Единична, Опис, Достапност). Product names and descriptions wrap over two or three lines about 10 units apart, and only the first line carries the price. Each line with a price starts a product, and lines without one that sit within 24 units below it are appended to its title and description. Header text above a page's first product and footers further down are ignored. KAM has no category column; the Опис (description) text is stored as the product's `category`. Availability is read from the first word of the Достапност column, since that column also picks up the promo price columns to its right.
+
 ### Price Parsing
 
 All scrapers parse prices with `utils/parsePrice.js`, which accepts both `1.299,00` and `1,299.00` styles, spaces (including NBSP) as thousands separators, and currency text. When both `.` and `,` appear, the last one is the decimal separator. A single separator followed by exactly three digits (`2.450`) is read as thousands, since MKD grocery prices don't have three decimals. Code that runs inside `page.evaluate` (the shared table extractor and Ramstore's DataTables fast path) returns the raw `priceText`, and Node parses it with `withParsedPrices`, because browser-context functions can't import modules.
