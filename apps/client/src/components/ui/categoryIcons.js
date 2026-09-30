@@ -159,7 +159,6 @@ export const getCategoryIcon = (category) => {
   return FALLBACK_ICON;
 };
 
-// Icons come from a static lookup table, so rendering them this way is stable across renders.
 export const CategoryIcon = ({ category, ...props }) =>
   createElement(getCategoryIcon(category), props);
 

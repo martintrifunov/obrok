@@ -29,8 +29,6 @@
  */
 
 /**
- * Result of scraping one store. When `upToDate` is true the pricelist has not
- * changed since `previousUpdate` and `products` is omitted.
  * @typedef {object} FetchProductsResult
  * @property {boolean} upToDate
  * @property {ScrapedProduct[]} [products]
@@ -95,8 +93,6 @@ export class BaseScraper {
   }
 
   /**
-   * Parse a pricelist "last updated" string such as "12.03.2026 9:30 PM" or
-   * "12.03.2026 9:30:15 PM" (KAM includes seconds).
    * @param {string | null | undefined} raw
    * @returns {Date | null}
    */

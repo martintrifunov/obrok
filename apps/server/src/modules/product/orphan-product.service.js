@@ -1,9 +1,3 @@
-/**
- * Removes products left with no price rows (after stale price cleanup or a
- * market/chain delete), together with their embeddings. Only scraper-made
- * products are removed: anything with a description or image was edited by an
- * admin and is kept even without prices.
- */
 export class OrphanProductService {
   constructor(productRepository, marketProductRepository, productEmbeddingRepository) {
     this.productRepository = productRepository;
@@ -33,7 +27,6 @@ export class OrphanProductService {
     return deletedCount;
   }
 
-  /** Removes every orphan that already exists. */
   async sweep() {
     return this.removeOrphans(await this.productRepository.findUnpricedScraperMadeIds());
   }

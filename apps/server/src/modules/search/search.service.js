@@ -66,11 +66,6 @@ export class SearchService {
     return this.searchProducts({ q, marketId, page, limit });
   }
 
-  /**
-   * Hybrid product search without the feature-flag gate or analytics tracking.
-   * Smart search calls this per ingredient with parseIntent: false, since the
-   * ingredient names already come from a parsed intent.
-   */
   async searchProducts({ q, marketId, page = 1, limit = 10, parseIntent = true }) {
     // Parse intent to extract clean search terms and price sorting preference
     const intent = parseIntent && this.intentParserService?.isAvailable()
@@ -196,12 +191,6 @@ export class SearchService {
     }));
   }
 
-  /**
-   * Keeps products sold at at least one market, preserving order. Products whose
-   * last price was removed by the scraper's stale-price cleanup stay in the
-   * catalog but must not show up as search results. (The market-scoped paths
-   * start from that market's price rows, so they never need this.)
-   */
   async #keepPriced(productIds) {
     if (!productIds.length) return [];
     const pricedIds = await MarketProductModel.distinct("product", {

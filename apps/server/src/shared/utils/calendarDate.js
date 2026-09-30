@@ -8,8 +8,6 @@ const ymdFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 
 /**
- * Today's calendar date in Skopje as a local-midnight Date, independent of the
- * server's TZ (the container runs in UTC, which is 1-2h behind Skopje).
  * @param {Date} [now]
  * @returns {Date}
  */
@@ -19,8 +17,6 @@ export const todayInAppTimeZone = (now = new Date()) => {
 };
 
 /**
- * Holiday dates are stored as UTC midnight (z.coerce.date on "YYYY-MM-DD").
- * Converts one to a local-midnight Date for the same calendar day.
  * @param {Date} date
  * @returns {Date}
  */
@@ -28,8 +24,6 @@ export const utcDateToLocalCalendarDate = (date) =>
   new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 
 /**
- * UTC bounds covering the given local calendar days, inclusive, for querying
- * UTC-midnight date fields.
  * @param {Date} startDay
  * @param {Date} endDay
  * @returns {{ from: Date, to: Date }}

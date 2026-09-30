@@ -1,9 +1,6 @@
 import { useCallback, useState } from "react";
 
 /**
- * Page state that snaps back to `initialPage` whenever `resetKey` changes
- * (e.g. a new search term), derived during render instead of reset in an effect.
- *
  * @param {unknown} resetKey
  * @param {number} [initialPage]
  * @returns {[number, (page: number | ((page: number) => number)) => void]}

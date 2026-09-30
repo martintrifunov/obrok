@@ -241,7 +241,6 @@ export class GeocoderService {
     return null;
   }
 
-  /** Waits until at least NOMINATIM_MIN_INTERVAL_MS have passed since the last request. */
   async #throttle() {
     const wait = this.#lastRequestAt + NOMINATIM_MIN_INTERVAL_MS - this.now();
     if (wait > 0) await this.sleepFn(wait);

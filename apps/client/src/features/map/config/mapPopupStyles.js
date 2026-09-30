@@ -1,4 +1,3 @@
-// MapLibre renders popups and attribution outside React, so they're themed via global selectors.
 export const getMapPopupStyles = (theme) => ({
   "& .maplibregl-popup-content": {
     backgroundColor: "background.paper",

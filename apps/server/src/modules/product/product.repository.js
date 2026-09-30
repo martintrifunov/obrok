@@ -114,7 +114,6 @@ export class ProductRepository {
     return new Map(docs.map((d) => [d.title, d._id]));
   }
 
-  /** Products carrying fields only the admin form sets (the scraper sets title and category only). */
   async findAdminEditedIds() {
     return ProductModel.distinct("_id", {
       $or: [
@@ -129,7 +128,6 @@ export class ProductRepository {
     return ProductModel.distinct("_id", { _id: { $in: ids }, ...SCRAPER_MADE }).exec();
   }
 
-  /** Scraper-made products with no price rows at all. */
   async findUnpricedScraperMadeIds() {
     const rows = await ProductModel.aggregate([
       { $match: SCRAPER_MADE },
@@ -148,7 +146,6 @@ export class ProductRepository {
     return rows.map((row) => row._id);
   }
 
-  /** Deletes scraper-made products by id; admin-edited ones are never deleted here. */
   async deleteScraperMadeByIds(ids) {
     if (!ids.length) return { deletedCount: 0 };
     return ProductModel.deleteMany({ _id: { $in: ids }, ...SCRAPER_MADE }).exec();

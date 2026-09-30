@@ -26,7 +26,6 @@ import MealSearchTab from "@/features/map/components/ai-search/MealSearchTab";
 export const PRODUCT_SEARCH_DEBOUNCE_MS = 500;
 export const MEAL_SEARCH_DEBOUNCE_MS = 700;
 
-// Rounded so small GPS jitter doesn't create a new query (and a new AI call).
 const roundLocation = ([lon, lat]) => ({
   lat: Number(lat.toFixed(4)),
   lon: Number(lon.toFixed(4)),

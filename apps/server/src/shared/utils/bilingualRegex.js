@@ -122,7 +122,6 @@ const transliterateCyrillicToLatin = (text, variant) =>
 
 export const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// NFC so decomposed input ("g" + combining acute) matches the mapped letters.
 const normalize = (text) => text.normalize("NFC").toLowerCase();
 
 const transliterateLatinToCyrillic = (text) => {
@@ -134,8 +133,6 @@ const transliterateLatinToCyrillic = (text) => {
 };
 
 /**
- * Spellings a token may appear as in titles: as typed, ASCII-folded, with
- * digraphs, and transliterated to Cyrillic. Duplicates removed, order kept.
  * @param {string} text
  * @returns {string[]}
  */
@@ -194,11 +191,6 @@ const stem = (token) => {
 };
 
 /**
- * Stricter matcher for grocery ingredients. Every token must be a whole word in
- * the title, allowing a short inflected ending: "сол" matches "Сол морска" and
- * "соли" but not "Солети". A token right after "без"/"bez" ("without") doesn't
- * count, so "Бонбони без шеќер" is not sugar. JS \b is ASCII-only, hence the
- * Unicode lookarounds.
  * @param {string} text
  * @returns {(title: string) => boolean}
  */

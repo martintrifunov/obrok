@@ -48,7 +48,6 @@ export class ScraperService {
     this.orphanProductsSwept = false;
   }
 
-  /** Idempotent; removes products that already have no prices (startup and first scrape). */
   async sweepOrphanProducts() {
     if (this.orphanProductsSwept || !this.orphanProductService) return;
 
@@ -71,7 +70,6 @@ export class ScraperService {
     }
   }
 
-  /** Idempotent; runs at startup and before the first scrape in standalone scripts. */
   async backfillLegacyPriceRows() {
     if (this.legacyPriceRowsBackfilled) return;
 

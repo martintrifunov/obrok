@@ -42,8 +42,6 @@ const parseLiteralBytes = (raw) => {
 const MAX_BFRANGE_SPAN = 0x10000;
 
 /**
- * Decode a CMap destination hex string: UTF-16BE code units, so one entry can be
- * a surrogate pair (<D835DC00>) or several characters (the "fi" ligature <00660069>).
  * @param {string} hex
  * @returns {number[]} UTF-16 code units
  */
@@ -59,8 +57,6 @@ const hexToCodeUnits = (hex) => {
 const unitsToString = (units) => String.fromCharCode(...units);
 
 /**
- * Parse the bfchar and bfrange entries of one ToUnicode CMap. Malformed entries
- * are skipped rather than failing the whole font.
  * @param {string} text decompressed CMap stream
  * @param {number} keyLen source code length in bytes (from the codespace range)
  * @returns {Map<string, string>} source code hex (lowercase) -> Unicode string

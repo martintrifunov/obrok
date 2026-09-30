@@ -66,10 +66,6 @@ export class ImageService {
     await this.imageRepository.delete(image);
   }
 
-  /**
-   * Deletes an image left behind by a deleted chain or product, unless something
-   * else still uses it or it's a seeded chain placeholder.
-   */
   async deleteIfUnused(imageId) {
     if (!imageId) return false;
     const image = await this.imageRepository.findById(imageId);

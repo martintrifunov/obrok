@@ -12,9 +12,6 @@ import {
 const FALLBACK_RESULTS = 3;
 
 /**
- * Hybrid search matches substrings, so "сол" (salt) also returns "Солети" and
- * "шеќер" returns "Бонбони без шеќер". Keep results whose title names the
- * ingredient as a word; if none do, fall back to the top-ranked few.
  * @param {string} ingredient
  * @param {Array<{ product: { title?: string }, marketProducts: Array<object> }>} results
  */

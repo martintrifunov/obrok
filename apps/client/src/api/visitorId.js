@@ -11,11 +11,6 @@ const generateId = () => {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
 };
 
-/**
- * One id per browser, sent with every API request. The first page load fires
- * several requests before any cookie comes back; without a shared id the
- * server minted a new visitor for each of them.
- */
 export const getVisitorId = () => {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);

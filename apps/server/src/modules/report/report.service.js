@@ -26,11 +26,6 @@ export class ReportService {
     this.activeJobs = new Map();
   }
 
-  /**
-   * Deletes report files older than `maxAgeMs` (never downloaded, or left behind
-   * by an aborted download). Runs opportunistically on createJob; also safe to
-   * call at startup.
-   */
   async cleanupStaleReports(maxAgeMs = STALE_REPORT_MS) {
     let entries;
     try {
@@ -57,10 +52,6 @@ export class ReportService {
     return removed;
   }
 
-  /**
-   * Jobs run in-process, so any job still PENDING/PROCESSING at startup was
-   * killed by a restart. Left alone, it blocks that user from new reports (409).
-   */
   async abortInterruptedJobs() {
     const result = await this.reportJobRepository.abortInterrupted(
       "Interrupted by a server restart.",

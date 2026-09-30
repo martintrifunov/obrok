@@ -134,7 +134,6 @@ export class MarketProductRepository {
     return MarketProductModel.bulkWrite(ops, { ordered: false });
   }
 
-  /** Hand-added rows only: explicit null, not scraper-stamped (or unmigrated) rows. */
   async findManualByProduct(productId, marketIds) {
     return MarketProductModel.find({
       product: productId,
@@ -155,7 +154,6 @@ export class MarketProductRepository {
     );
   }
 
-  /** Any row (scraped or hand-added) of this product at the given markets. */
   async findByProductAndMarkets(productId, marketIds) {
     return MarketProductModel.find({
       product: productId,
@@ -184,11 +182,6 @@ export class MarketProductRepository {
     }).exec();
   }
 
-  /**
-   * How many products the market's most recent scrape saw (all rows seen in one
-   * scrape share its timestamp). 0 if it has never been scraped with stamps.
-   * Stale rows are excluded, so they can't inflate the baseline and block cleanup.
-   */
   async countSeenInLatestScrape(marketId) {
     const latest = await MarketProductModel.findOne({
       market: marketId,
@@ -206,7 +199,6 @@ export class MarketProductRepository {
     }).exec();
   }
 
-  /** Deletes scraper-owned rows of a market that the scrape at `seenAt` didn't see. */
   async deleteUnseenSince(marketId, seenAt) {
     return MarketProductModel.deleteMany({
       market: marketId,
@@ -214,13 +206,6 @@ export class MarketProductRepository {
     }).exec();
   }
 
-  /**
-   * One-time migration for rows created before lastSeenAt existed. Rows in
-   * scraped markets whose product has no admin-only fields (description, image)
-   * are stamped as scraper-owned but long unseen, so the next complete scrape
-   * removes the stale ones. The rest are marked admin-owned (null).
-   * Idempotent: only rows missing the field are touched.
-   */
   async backfillLastSeen({ scrapedMarketIds, adminProductIds }) {
     const legacy = { lastSeenAt: { $exists: false } };
     const stamped = await MarketProductModel.updateMany(
@@ -241,7 +226,6 @@ export class MarketProductRepository {
     return MarketProductModel.create(data);
   }
 
-  /** Products whose rows deleteUnseenSince(marketId, seenAt) would remove. */
   async findUnseenProductIds(marketId, seenAt) {
     return MarketProductModel.distinct("product", {
       market: marketId,
@@ -253,7 +237,6 @@ export class MarketProductRepository {
     return MarketProductModel.distinct("product", { market: marketId }).exec();
   }
 
-  /** The subset of productIds that still have at least one price row. */
   async findPricedProductIds(productIds) {
     if (!productIds.length) return [];
     return MarketProductModel.distinct("product", {

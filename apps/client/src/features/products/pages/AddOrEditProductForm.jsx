@@ -158,7 +158,6 @@ const AddOrEditProductForm = () => {
     setAddedPrices((prev) => prev.filter((p) => p.market !== marketId));
   };
 
-  // Changed hand-added prices, or an error message if one is invalid.
   const collectPriceChanges = () => {
     const prices = [];
     for (const mp of fetchedProduct?.marketProducts || []) {
