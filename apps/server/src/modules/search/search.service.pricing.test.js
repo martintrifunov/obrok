@@ -106,4 +106,12 @@ describe("SearchService hides products without prices", () => {
     expect(result.data.map((r) => r.product._id).sort()).toEqual(["p1", "p3"]);
     expect(result.pagination.total).toBe(2);
   });
+
+  it("keeps only ingredient candidates close to the best priced match", async () => {
+    // Index scores: p1 1.0, p2 0.9 (unpriced), p3 0.8.
+    const candidates = await service.findIngredientCandidates("млеко");
+
+    expect(candidates.map((r) => r.product._id)).toEqual(["p1"]);
+    expect(candidates[0].marketProducts[0]).toMatchObject({ price: 60 });
+  });
 });

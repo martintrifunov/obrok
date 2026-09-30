@@ -17,6 +17,10 @@ const TITLE_START_LIMIT = 1500;
 const MARKET_KEYWORD_LIMIT = 3000;
 const VECTOR_LIMIT = 100;
 const VECTOR_OVERFETCH = 300;
+// Meal ingredients: only products this close to the best vector match count as
+// the ingredient. Misleading word matches ("ПАСТА ЗА ЗАБИ" for "паста", sauce
+// "СО СИРЕЊЕ" for "сирење") sit 0.03 or more below it.
+const INGREDIENT_WINDOW = 0.025;
 
 const buildFieldMatchClauses = (patterns, fields, mode = "and") => {
   if (!patterns.length) return {};
@@ -86,6 +90,26 @@ export class SearchService {
       pagination: buildPaginationMeta({ total, page, limit }),
       priceSort,
     };
+  }
+
+  /**
+   * Products that are the named ingredient, by vector similarity, with their
+   * prices. Null when vector search isn't available, so callers can fall back.
+   * @param {string} name
+   */
+  async findIngredientCandidates(name) {
+    const queryEmbedding = await this.#embedQuery(parseSearchQuery(name).embeddingText);
+    if (!queryEmbedding) return null;
+
+    const nearest = this.vectorIndex.search(queryEmbedding, { k: VECTOR_OVERFETCH });
+    const priced = new Set(
+      (await this.#keepPriced(nearest.map((h) => new mongoose.Types.ObjectId(h.productId)))).map(String),
+    );
+    const hits = nearest.filter((h) => priced.has(h.productId));
+    if (!hits.length) return [];
+
+    const floor = hits[0].score - INGREDIENT_WINDOW;
+    return this.#hydrateResults(hits.filter((h) => h.score >= floor), null, null);
   }
 
   async #sortByPrice(results, marketId, priceSort) {

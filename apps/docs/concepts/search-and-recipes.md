@@ -35,11 +35,13 @@ For a meal (e.g. "тавче гравче за 4 луѓе") the flow changes:
 ```mermaid
 flowchart TD
     A[Recipe query] --> B[Saved decomposition, or the language model splits it into ingredients]
-    B --> C[Hybrid search runs per ingredient, in parallel]
+    B --> C[Per ingredient: products closest to it by meaning, in parallel]
     C --> D[Group results by market: which markets carry which ingredients, at what price]
     D --> E[Rank markets: complete match first, then within-budget, then match count, then distance, then price]
     E --> F[Shopping list + ranked markets returned]
 ```
+
+Each ingredient is matched by meaning, not by the word alone: "паста" in a meal should be priced with pasta, not "ПАСТА ЗА ЗАБИ" (toothpaste), even though the toothpaste title contains the word. Only products very close to the best match count, and in each store the cheapest of its closest matches is used. Results show at most three stores per chain, since stores of one chain usually share a pricelist.
 
 The ingredient list itself is whatever the language model returns, there is no structured recipe database behind it. This is a deliberate trade-off: it works for arbitrary dishes without needing anyone to curate a recipe corpus, at the cost of decomposition quality being only as good as the model's output for that particular dish and phrasing.
 

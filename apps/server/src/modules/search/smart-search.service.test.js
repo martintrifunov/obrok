@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SmartSearchService, pickIngredientCandidates } from "./smart-search.service.js";
+import { SmartSearchService, pickIngredientCandidates, limitPerChain } from "./smart-search.service.js";
 
 const market = { _id: "m1", name: "Vero", location: [42.0, 21.4] };
 
@@ -131,5 +131,60 @@ describe("SmartSearchService", () => {
 
       expect(result.data.shoppingList).toEqual([{ name: "шафран", found: false }]);
     });
+  });
+
+  describe("with vector search", () => {
+    it("prices an ingredient with the vector candidates, cheapest per market", async () => {
+      intentParserService.parseIntent.mockResolvedValue({
+        intent: "recipe",
+        products: ["тестенини"],
+        priceSort: "asc",
+      });
+      searchService.findIngredientCandidates = vi.fn(async () => [
+        makeResult("Фусили 500г", 90),
+        makeResult("Шпагети 500г", 70),
+      ]);
+
+      const result = await sut.search({ q: "паста" });
+
+      expect(searchService.searchProducts).not.toHaveBeenCalled();
+      expect(result.data.markets[0].products[0]).toMatchObject({ title: "Шпагети 500г", price: 70 });
+    });
+
+    it("lets only a store's closest matches compete on price", async () => {
+      intentParserService.parseIntent.mockResolvedValue({
+        intent: "recipe",
+        products: ["бело сирење"],
+        priceSort: "asc",
+      });
+      searchService.findIngredientCandidates = vi.fn(async () => [
+        { ...makeResult("Бело сирење кравјо 1кг", 390), score: 0.82 },
+        { ...makeResult("Посен намаз бело 200г", 119), score: 0.8 },
+      ]);
+
+      const result = await sut.search({ q: "сирење" });
+
+      expect(result.data.markets[0].products[0]).toMatchObject({ title: "Бело сирење кравјо 1кг" });
+    });
+
+    it("falls back to word matching when vector search is unavailable", async () => {
+      searchService.findIngredientCandidates = vi.fn(async () => null);
+
+      await sut.search({ q: "палачинки" });
+
+      expect(searchService.searchProducts).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
+describe("limitPerChain", () => {
+  it("keeps at most three stores per chain, in order", () => {
+    const store = (id, chain) => ({ market: { _id: id, chain: { _id: chain } } });
+    const markets = [
+      store("v1", "vero"), store("v2", "vero"), store("k1", "kam"),
+      store("v3", "vero"), store("v4", "vero"), store("k2", "kam"),
+    ];
+
+    expect(limitPerChain(markets).map((m) => m.market._id)).toEqual(["v1", "v2", "k1", "v3", "k2"]);
   });
 });

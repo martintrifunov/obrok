@@ -1,7 +1,7 @@
 // Relevance checks run by eval-search.js against the live catalogue.
 // `expect` and `forbid` are matched against product titles.
 
-const PASTA = /ТЕСТЕН|ШПАГЕТ|ПЕНЕ|ФУСИЛ|МАШНИ|МАКАРОН|ФАРФАЛ|ТАЛЈАТЕЛ|ТАГЛИАТЕЛ|ЛАЗАЊ|ТОРТИГЛ|РИГАТОН|ПАСТАРОТ/i;
+const PASTA = /ТЕСТЕН|ШПАГЕТ|ПЕНЕ|ФУСИЛ|МАШНИ|МАКАРОН|ФАРФАЛ|ТАЛЈАТЕЛ|ТАГЛИАТЕЛ|ЛАЗАЊ|ТОРТИГЛ|РИГАТОН|ПАСТАРОТ|ФИДЕ|PAGETI|PASTA BARILA/i;
 
 /** Plain product search (the product tab). */
 export const searchCases = [
@@ -39,7 +39,7 @@ export const ingredientCases = [
   { name: "леб", expect: /(^|\s)ЛЕБ/i, forbid: /ЛЕБЛЕБ|ТРОШКИ|ПРЕЗЛ/i },
   { name: "млеко", expect: /МЛЕКО/i, forbid: /ЧОКОЛ|ДЕТСКА|КАФЕ|СОС|ЛОСИОН|ЗА ТЕЛО|ПУДИНГ/i },
   { name: "јајца", expect: /ЈАЈЦ|JAJC/i, forbid: /ТЕСТЕНИН|МАЈОНЕЗ|ЧОКОЛ|КИНДЕР/i },
-  { name: "шеќер", expect: /ШЕЌЕР/i, forbid: /БЕЗ ШЕЌЕР|БОНБОН/i },
+  { name: "шеќер", expect: /ШЕЌЕР|ШЕКЕР/i, forbid: /БЕЗ ШЕЌЕР|БОНБОН/i },
   { name: "брашно", expect: /БРАШНО/i, forbid: /ПАНИРЕЗ|ПРЕЗЛ/i },
   { name: "путер", expect: /ПУТЕР|МАСЛО/i, forbid: /КИКИРИК|КЕКС|БИСКВИТ|КРЕКЕР|ЗА ТЕЛО/i },
   { name: "шунка", expect: /ШУНКА/i, forbid: /ПИЦА|СЕНДВИЧ|ЧИПС|САЛАМ/i },
@@ -48,7 +48,7 @@ export const ingredientCases = [
   { name: "компир", expect: /КОМПИР/i, forbid: /ЧИПС|СТИК|КРОКЕТ/i },
   { name: "мелено месо", expect: /МЕЛЕН|MELEN/i, forbid: /ЗАЧИН|ПИПЕР/i },
   { name: "ориз", expect: /ОРИЗ/i, forbid: /ВАФЛ|ЧОКОЛ|МЛЕКО|КРЕКЕР|ГАЛЕТ/i },
-  { name: "маслиново масло", expect: /МАСЛИН/i, forbid: /ЗА ТЕЛО|САПУН|КРЕМА|МАСЛИНКИ/i },
+  { name: "маслиново масло", expect: /МАСЛИН|ВИРЏИН|VIRGIN/i, forbid: /ЗА ТЕЛО|САПУН|КРЕМА|МАСЛИНКИ/i },
 ];
 
 /** Meal decomposition by the intent parser (costs one LLM call each). */

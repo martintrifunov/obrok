@@ -10,6 +10,27 @@ import {
 // Used only when no result names the ingredient as a word (e.g. an unusual
 // spelling); the hybrid ranking then decides, not the lowest price.
 const FALLBACK_RESULTS = 3;
+const MAX_MARKETS = 20;
+// Within one store, only products this close to its best match for the
+// ingredient compete on price, so a cheaper near-miss can't win.
+const MARKET_BAND = 0.01;
+// Stores of one chain usually share a pricelist; show a few, not twenty.
+const MAX_MARKETS_PER_CHAIN = 3;
+
+/**
+ * @template {{ market: { _id?: any, chain?: any } }} T
+ * @param {T[]} markets best first
+ * @returns {T[]}
+ */
+export const limitPerChain = (markets) => {
+  const perChain = new Map();
+  return markets.filter(({ market }) => {
+    const chain = String(market.chain?._id ?? market.chain ?? market._id);
+    const count = perChain.get(chain) || 0;
+    perChain.set(chain, count + 1);
+    return count < MAX_MARKETS_PER_CHAIN;
+  });
+};
 
 /**
  * @param {string} ingredient
@@ -174,7 +195,7 @@ export class SmartSearchService {
     return {
       data: {
         shoppingList,
-        markets: filteredMarkets.slice(0, 20),
+        markets: limitPerChain(filteredMarkets).slice(0, MAX_MARKETS),
         nearestMarket: nearestComplete || null,
         query: q,
         priceSort: intent.priceSort || "asc",
@@ -193,28 +214,54 @@ export class SmartSearchService {
    * @returns {Promise<{ name: string, strict: boolean, offers: Map<string, { market: any, product: any, price: number }> }>}
    */
   async findIngredient(name) {
-    const result = await this.searchService.searchProducts({
-      q: name,
-      page: 1,
-      limit: 20,
-    });
-    const { results, strict } = pickIngredientCandidates(name, result.data);
+    const { results, strict, scored } = await this.#ingredientCandidates(name);
 
-    const offers = new Map();
+    /** @type {Map<string, { market: any, product: any, price: number, score: number }[]>} */
+    const byMarket = new Map();
     for (const candidate of results) {
       for (const mp of candidate.marketProducts) {
         if (!mp.market?._id) continue;
         const mid = mp.market._id.toString();
-        const existing = offers.get(mid);
-        // Among real matches keep the cheapest per market; for fallback
-        // results (no real match) keep the best-ranked instead.
-        const better = strict ? !existing || mp.price < existing.price : !existing;
-        if (better) {
-          offers.set(mid, { market: mp.market, product: candidate.product, price: mp.price });
-        }
+        if (!byMarket.has(mid)) byMarket.set(mid, []);
+        byMarket.get(mid).push({
+          market: mp.market,
+          product: candidate.product,
+          price: mp.price,
+          score: candidate.score ?? 0,
+        });
       }
     }
+
+    const offers = new Map();
+    for (const [mid, options] of byMarket) {
+      offers.set(mid, this.#pickOffer(options, { strict, scored }));
+    }
     return { name, strict, offers };
+  }
+
+  /**
+   * @param {{ market: any, product: any, price: number, score: number }[]} options in rank order
+   * @param {{ strict: boolean, scored: boolean }} mode
+   */
+  #pickOffer(options, { strict, scored }) {
+    // Fallback results (no real match): keep the best-ranked, not the cheapest.
+    if (!strict) return options[0];
+    let eligible = options;
+    if (scored) {
+      const best = Math.max(...options.map((o) => o.score));
+      eligible = options.filter((o) => o.score >= best - MARKET_BAND);
+    }
+    const { market, product, price } = eligible.reduce((a, b) => (b.price < a.price ? b : a));
+    return { market, product, price };
+  }
+
+  async #ingredientCandidates(name) {
+    const byVector = await this.searchService.findIngredientCandidates?.(name);
+    if (byVector) return { results: byVector, strict: true, scored: true };
+
+    // No vector index: word matches over the hybrid results.
+    const result = await this.searchService.searchProducts({ q: name, page: 1, limit: 20 });
+    return { ...pickIngredientCandidates(name, result.data), scored: false };
   }
 
   #getMondayOfWeek(date) {

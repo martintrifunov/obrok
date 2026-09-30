@@ -62,11 +62,21 @@ flowchart TD
 flowchart TD
     A[Recipe Query] --> B[Intent Parser: Detect Recipe]
     B --> C[Decompose into Ingredients]
-    C --> D[Per-Ingredient Market Search]
-    D --> E[Price Ranking per Market]
+    C --> D[Per-Ingredient Candidates by Vector Similarity]
+    D --> E[Cheapest Close Match per Market]
     E --> F[Distance Calculation via Haversine]
     F --> G[Combined Price + Distance Results]
 ```
+
+### Ingredient Selection
+
+Each ingredient is priced per market by `SmartSearchService.findIngredient`:
+
+1. **Candidates** (`SearchService.findIngredientCandidates`): priced products whose vector similarity to the ingredient is within 0.025 of the best match. Keyword matches alone never qualify: measured on the catalogue, the misleading ones ("ПАСТА ЗА ЗАБИ" for "паста", "СОС ... СО СИРЕЊЕ" for "сирење", "БЕЗ ШЕЌЕР" for "шеќер") sit 0.03 to 0.08 below the best match.
+2. **Per market**: among the candidates that market sells, only those within 0.01 of its own best one compete, and the cheapest of those is used. This keeps a cheaper near-miss (instant noodles for pasta, a vegan spread for cheese) from winning on price.
+3. **Fallback**: without the vector index, the hybrid results are filtered to titles that name the ingredient as a word (`pickIngredientCandidates`) and the cheapest is used.
+
+Results show at most three stores per chain (stores of one chain usually share a pricelist) and 20 stores in total.
 
 ### Embedding Service
 
