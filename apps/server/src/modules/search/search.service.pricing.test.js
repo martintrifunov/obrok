@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SearchService } from "./search.service.js";
 
 // Catalog: "млеко 1" and "млеко 3" are sold somewhere; "млеко 2" lost its last
 // price in the scraper's stale-price cleanup.
@@ -11,54 +12,20 @@ const priceRows = [
   { product: "p1", price: 60, market: { _id: "m1", name: "Vero" } },
   { product: "p3", price: 55, market: { _id: "m2", name: "KAM" } },
 ];
+const pricedIds = new Set(priceRows.map((r) => r.product));
 
-const chain = (result) => {
-  const q = {
-    select: () => q,
-    limit: () => q,
-    populate: () => q,
-    lean: () => q,
-    exec: () => Promise.resolve(result),
-  };
-  return q;
-};
-
-const idsIn = (filter) => (filter?.$in || []).map(String);
-
-vi.mock("../product/product.model.js", () => ({
-  ProductModel: {
-    find: vi.fn((query) =>
-      query._id
-        ? chain(products.filter((p) => idsIn(query._id).includes(p._id)))
-        : chain(products.map(({ _id }) => ({ _id }))),
-    ),
-  },
-}));
-
-vi.mock("../product/market-product.model.js", () => ({
-  MarketProductModel: {
-    distinct: vi.fn(async (_field, { product }) =>
-      [...new Set(priceRows.map((r) => r.product))].filter((id) => idsIn(product).includes(id)),
-    ),
-    find: vi.fn((query) =>
-      chain(priceRows.filter((r) => idsIn(query.product).includes(r.product))),
-    ),
-    aggregate: vi.fn().mockResolvedValue([]),
-  },
-}));
-
-// A constructor can't return a primitive, so box the id; String() unboxes it.
-vi.mock("mongoose", () => ({
-  default: {
-    Types: {
-      ObjectId: function ObjectId(id) {
-        return new String(id);
-      },
-    },
-  },
-}));
-
-const { SearchService } = await import("./search.service.js");
+const repository = () => ({
+  findMatching: vi.fn(async () => products),
+  findTitleStartingWith: vi.fn(async () => products),
+  findMatchingInMarket: vi.fn(async () => []),
+  findMarketProductIds: vi.fn(async () => []),
+  keepPriced: vi.fn(async (ids) => ids.map(String).filter((id) => pricedIds.has(id))),
+  findPriceRanges: vi.fn(async () => new Map()),
+  findForDisplay: vi.fn(async (ids) => ({
+    products: products.filter((p) => ids.includes(p._id)),
+    marketProducts: priceRows.filter((r) => ids.includes(r.product)),
+  })),
+});
 
 describe("SearchService hides products without prices", () => {
   let embeddingService;
@@ -74,9 +41,13 @@ describe("SearchService hides products without prices", () => {
     vectorIndex = {
       isReady: () => true,
       load: vi.fn(),
-      search: vi.fn(() => products.map((p, i) => ({ productId: p._id, score: 1 - i / 10 }))),
+      search: vi.fn((_query, { productIds } = {}) => {
+        const all = products.map((p, i) => ({ productId: p._id, score: 1 - i / 10 }));
+        return productIds ? all.filter((h) => [...productIds].includes(h.productId)) : all;
+      }),
     };
     service = new SearchService(
+      repository(),
       embeddingService,
       vectorIndex,
       { isEnabled: vi.fn().mockResolvedValue(true) },
@@ -92,10 +63,9 @@ describe("SearchService hides products without prices", () => {
   });
 
   it("drops unpriced products found by vector search", async () => {
-    await service.searchProducts({ q: "млеко" });
+    const result = await service.searchProducts({ q: "млеко" });
 
     expect(vectorIndex.search).toHaveBeenCalled();
-    const result = await service.searchProducts({ q: "млеко" });
     expect(result.data.map((r) => r.product._id)).not.toContain("p2");
   });
 

@@ -1,9 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
+import { isTransientError, retryDelayMs } from "../../shared/ai/gemini-errors.js";
 
 const MODEL = "gemini-embedding-2";
 const DIMENSIONS = 768;
 const CHUNK_SIZE = 20;
 const QUERY_CACHE_SIZE = 2000;
+const MAX_RETRY_DELAY_MS = 60_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -42,35 +44,6 @@ export class EmbeddingService {
     return embedding;
   }
 
-  #isTransientError(err) {
-    const status = err?.status;
-    const message = String(err?.message || "").toUpperCase();
-    const code = err?.code || err?.cause?.code;
-    const networkCodes = ["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENOTFOUND"];
-
-    return (
-      status === 429 ||
-      status === 500 ||
-      status === 502 ||
-      status === 503 ||
-      status === 504 ||
-      message.includes("RESOURCE_EXHAUSTED") ||
-      message.includes("UNAVAILABLE") ||
-      message.includes("FETCH FAILED") ||
-      networkCodes.includes(code)
-    );
-  }
-
-  #getRetryDelayMs(err, attempt) {
-    const retryInMatch = String(err?.message || "").match(/retry in ([\d.]+)s/i);
-    if (retryInMatch) return Math.ceil(Number(retryInMatch[1]) * 1000);
-
-    // Exponential backoff with a small jitter to avoid synchronized retries.
-    const base = Math.min(60_000, 2_000 * 2 ** attempt);
-    const jitter = Math.floor(Math.random() * 500);
-    return base + jitter;
-  }
-
   #formatForTaskType(text, taskType) {
     if (taskType === "RETRIEVAL_QUERY") {
       return `task: search result | query: ${text}`;
@@ -89,8 +62,8 @@ export class EmbeddingService {
         });
         return result.embeddings[0].values;
       } catch (err) {
-        if (attempt < maxRetries && this.#isTransientError(err)) {
-          const wait = this.#getRetryDelayMs(err, attempt);
+        if (attempt < maxRetries && isTransientError(err)) {
+          const wait = retryDelayMs(err, attempt, MAX_RETRY_DELAY_MS);
           console.log(`[Embedding] API busy, retrying in ${Math.round(wait / 1000)}s...`);
           await sleep(wait);
           continue;

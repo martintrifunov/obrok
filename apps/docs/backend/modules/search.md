@@ -16,6 +16,7 @@ Dual-mode AI-powered search: hybrid vector+keyword search for products and smart
 |------|------|
 | `search.controller.js` | Hybrid search HTTP handler |
 | `search.service.js` | Hybrid search orchestration (vector + keyword + fusion) |
+| `search.repository.js` | MongoDB queries used by search (keyword matches, prices, display data) |
 | `hybrid-ranker.js` | Keyword relevance scores, weighted fusion, price sorting of strong matches |
 | `search.routes.js` | Search route definitions |
 | `smart-search.controller.js` | Smart/recipe search HTTP handler |
@@ -83,7 +84,7 @@ Results show at most three stores per chain (stores of one chain usually share a
 - **Model**: Gemini text embeddings (768 dimensions); exact model id in `embedding.service.js` (`MODEL` constant).
 - **Task-type-aware prompts**: the raw text is wrapped differently depending on whether it's being embedded as a document (`title: ... | text: ...`) or a query (`task: search result | query: ...`), matching Gemini's retrieval-tuning convention for asymmetric search.
 - **Batch processing**: rate-limited at 350ms between batches.
-- **Retry**: exponential backoff on rate-limit and transient network errors (timeouts, DNS failures, connection resets).
+- **Retry**: exponential backoff on rate-limit and transient network errors (timeouts, DNS failures, connection resets), shared with the intent parser in `shared/ai/gemini-errors.js`.
 
 ### Vector Index
 

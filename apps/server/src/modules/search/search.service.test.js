@@ -1,34 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SearchService } from "./search.service.js";
 
-// Mock Mongoose models before importing SearchService
-vi.mock("../product/product.model.js", () => ({
-  ProductModel: {
-    find: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        limit: vi.fn().mockReturnValue({
-          lean: vi.fn().mockReturnValue({
-            exec: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      }),
-    }),
-  },
-}));
-
-vi.mock("../product/market-product.model.js", () => ({
-  MarketProductModel: {
-    find: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockReturnValue({
-          exec: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    }),
-    aggregate: vi.fn().mockResolvedValue([]),
-  },
-}));
-
-const { SearchService } = await import("./search.service.js");
+const emptyRepository = () => ({
+  findMatching: vi.fn().mockResolvedValue([]),
+  findTitleStartingWith: vi.fn().mockResolvedValue([]),
+  findMatchingInMarket: vi.fn().mockResolvedValue([]),
+  findMarketProductIds: vi.fn().mockResolvedValue([]),
+  keepPriced: vi.fn(async (ids) => ids.map(String)),
+  findPriceRanges: vi.fn().mockResolvedValue(new Map()),
+  findForDisplay: vi.fn().mockResolvedValue({ products: [], marketProducts: [] }),
+});
 
 describe("SearchService", () => {
   let embeddingService;
@@ -40,21 +21,14 @@ describe("SearchService", () => {
     embeddingService = {
       isAvailable: vi.fn().mockReturnValue(true),
       generateEmbedding: vi.fn(),
-      generateBatchEmbeddings: vi.fn(),
     };
     vectorIndex = {
       isReady: vi.fn().mockReturnValue(true),
       load: vi.fn().mockResolvedValue(undefined),
       search: vi.fn().mockReturnValue([]),
     };
-    featureFlagService = {
-      isEnabled: vi.fn(),
-    };
-    service = new SearchService(
-      embeddingService,
-      vectorIndex,
-      featureFlagService,
-    );
+    featureFlagService = { isEnabled: vi.fn() };
+    service = new SearchService(emptyRepository(), embeddingService, vectorIndex, featureFlagService);
   });
 
   it("returns empty results when ai-search flag is disabled", async () => {
@@ -72,10 +46,7 @@ describe("SearchService", () => {
 
     await service.search({ q: "леб", page: 1, limit: 10 });
 
-    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith(
-      "леб",
-      "RETRIEVAL_QUERY",
-    );
+    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("леб", "RETRIEVAL_QUERY");
   });
 
   it("embeds Latin queries in Cyrillic", async () => {

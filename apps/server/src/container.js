@@ -24,6 +24,7 @@ import { FeatureFlagController } from "./modules/feature-flag/feature-flag.contr
 import { SearchService } from "./modules/search/search.service.js";
 import { SearchController } from "./modules/search/search.controller.js";
 import { VectorIndex } from "./modules/search/vector-index.js";
+import { SearchRepository } from "./modules/search/search.repository.js";
 import { MealIntentRepository } from "./modules/search/meal-intent.repository.js";
 import { IntentParserService } from "./modules/search/intent-parser.service.js";
 import { SmartSearchService } from "./modules/search/smart-search.service.js";
@@ -99,6 +100,7 @@ const intentParserService = new IntentParserService(new MealIntentRepository());
 const vectorIndex = new VectorIndex(productEmbeddingRepository);
 
 const searchService = new SearchService(
+  new SearchRepository(),
   embeddingService,
   vectorIndex,
   featureFlagService,

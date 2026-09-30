@@ -1,10 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { parseSearchQuery, mealCacheKey } from "./query-rules.js";
+import { isModelUnavailableError, isTransientError, retryDelayMs } from "../../shared/ai/gemini-errors.js";
 
 // Cheapest first; the second is a fallback if the first is unavailable.
 const MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 const MEMORY_CACHE_SIZE = 500;
 const MAX_INGREDIENTS = 10;
+const MAX_RETRY_DELAY_MS = 30_000;
 
 const SYSTEM_PROMPT = `Split a Macedonian meal request into the groceries needed to make it.
 Input is Macedonian in Cyrillic or Latin script.
@@ -110,13 +112,13 @@ export class IntentParserService {
         const parsed = JSON.parse(text);
         return this.#validate(parsed);
       } catch (err) {
-        if (this.#isModelUnavailableError(err)) {
+        if (isModelUnavailableError(err)) {
           console.warn(`[IntentParser] Model ${model} unavailable, trying next model.`);
           return null;
         }
 
-        if (attempt < maxRetries && this.#isTransientError(err)) {
-          const wait = this.#getRetryDelayMs(err, attempt);
+        if (attempt < maxRetries && isTransientError(err)) {
+          const wait = retryDelayMs(err, attempt, MAX_RETRY_DELAY_MS);
           console.log(
             `[IntentParser] API error, retrying in ${Math.round(wait / 1000)}s...`,
           );
@@ -142,38 +144,5 @@ export class IntentParserService {
 
   #fallback() {
     return { intent: "search", products: [] };
-  }
-
-  #isTransientError(err) {
-    const status = err?.status;
-    const message = String(err?.message || "").toUpperCase();
-    const code = err?.code || err?.cause?.code;
-    const networkCodes = ["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENOTFOUND"];
-
-    return (
-      status === 429 ||
-      status === 500 ||
-      status === 502 ||
-      status === 503 ||
-      status === 504 ||
-      message.includes("RESOURCE_EXHAUSTED") ||
-      message.includes("UNAVAILABLE") ||
-      message.includes("FETCH FAILED") ||
-      networkCodes.includes(code)
-    );
-  }
-
-  #isModelUnavailableError(err) {
-    const status = err?.status;
-    const message = String(err?.message || "").toUpperCase();
-    return status === 404 || message.includes("NO LONGER AVAILABLE") || message.includes("NOT_FOUND");
-  }
-
-  #getRetryDelayMs(err, attempt) {
-    const retryInMatch = String(err?.message || "").match(/retry in ([\d.]+)s/i);
-    if (retryInMatch) return Math.ceil(Number(retryInMatch[1]) * 1000);
-    const base = Math.min(30_000, 2_000 * 2 ** attempt);
-    const jitter = Math.floor(Math.random() * 500);
-    return base + jitter;
   }
 }
