@@ -43,6 +43,8 @@ Runbooks define routine operational tasks and incident responses for production.
 1. Wipe all scraper data: `npm run scrape:db:wipe` (inside the API container).
 2. Wipe a single chain: `npm run scrape:db:wipe -- <chain>` (e.g. `npm run scrape:db:wipe -- kam`).
 3. Re-scrape the chain: `npm run scrape -- <chain>`.
+
+The scripts pick their database the same way everywhere: inside a container they use `DATABASE_URI` (the `db` service), and on the host they use `MONGO_URI_LOCAL` (the published port), falling back to whichever is set.
 4. Verify data via API or application UI.
 
 Available chain keys: vero, ramstore, stokomak, kam, superkitgo.

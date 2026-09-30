@@ -25,6 +25,7 @@ import {
   createScraper,
   SCRAPER_KEYS,
 } from "../modules/scraper/scraper.registry.js";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
 async function main() {
   const target = process.argv[2]?.toLowerCase();
@@ -40,7 +41,7 @@ async function main() {
 
   const scrapers = selectedScraper ? [selectedScraper] : createAllScrapers();
 
-  const uri = process.env.MONGO_URI_LOCAL ?? process.env.DATABASE_URI;
+  const uri = scriptMongoUri();
 
   if (!uri) {
     console.error("[scrape] No MongoDB URI found in .env");

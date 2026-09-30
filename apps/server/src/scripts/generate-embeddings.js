@@ -9,13 +9,14 @@ config({ path: path.resolve(__dirname, "../../../../.env") });
 import { EmbeddingService } from "../modules/search/embedding.service.js";
 import { ProductEmbeddingRepository } from "../modules/search/product-embedding.repository.js";
 import { syncProductEmbeddings } from "../modules/search/product-embedding-sync.service.js";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
 const main = async () => {
   const force =
     process.argv.includes("--force") ||
     process.env.npm_config_force === "true" ||
     process.env.npm_config_force === "1";
-  const dbUri = process.env.MONGO_URI_LOCAL || process.env.DATABASE_URI;
+  const dbUri = scriptMongoUri();
 
   if (!dbUri) {
     console.error("Set DATABASE_URI or MONGO_URI_LOCAL in .env");

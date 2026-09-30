@@ -2,6 +2,7 @@ import { config } from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
 import mongoose from "mongoose";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -109,7 +110,7 @@ async function wipeChain(db, chainKey) {
 
 async function wipe() {
   const target = process.argv[2]?.toLowerCase();
-  const uri = process.env.MONGO_URI_LOCAL ?? process.env.DATABASE_URI;
+  const uri = scriptMongoUri();
   if (!uri) throw new Error("No Mongo URI found");
 
   console.log("Connecting to database...");

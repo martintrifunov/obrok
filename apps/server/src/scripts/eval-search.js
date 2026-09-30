@@ -21,6 +21,7 @@ import "../modules/chain/chain.model.js";
 import "../modules/image/image.model.js";
 import { searchCases, ingredientCases, mealCases } from "./search-eval/cases.js";
 import { transliterateLatinToCyrillic } from "../shared/utils/bilingualRegex.js";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
 const TOP_K = 5;
 const args = process.argv.slice(2);
@@ -148,7 +149,7 @@ function report(label, rows, extra = () => "") {
 }
 
 async function main() {
-  await mongoose.connect(process.env.DATABASE_URI || process.env.MONGO_URI_LOCAL);
+  await mongoose.connect(scriptMongoUri());
 
   const embeddingService = new EmbeddingService();
   const intentParserService = new IntentParserService(

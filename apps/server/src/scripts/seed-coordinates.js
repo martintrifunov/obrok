@@ -9,6 +9,7 @@ import fs from "fs";
 import mongoose from "mongoose";
 import { MarketModel } from "../modules/market/market.model.js";
 import { normalizeMarketName } from "../modules/scraper/normalize-market-name.js";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +32,7 @@ async function main() {
     process.exit(0);
   }
 
-  const uri = process.env.MONGO_URI_LOCAL ?? process.env.DATABASE_URI;
+  const uri = scriptMongoUri();
   if (!uri) {
     console.error("[seed-coords] No MongoDB URI found in .env");
     process.exit(1);
