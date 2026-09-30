@@ -8,6 +8,7 @@ export async function syncProductEmbeddings({
   embeddingService,
   productEmbeddingRepository,
   featureFlagService,
+  force = false,
   logger = console,
   logPrefix = "[EmbeddingSync]",
 }) {
@@ -28,7 +29,7 @@ export async function syncProductEmbeddings({
     const totalProducts = await ProductModel.countDocuments().exec();
     logger.log(`${logPrefix} Generating embeddings for ${totalProducts} products...`);
 
-    const existing = await productEmbeddingRepository.findAllHashes();
+    const existing = force ? [] : await productEmbeddingRepository.findAllHashes();
     const existingMap = new Map(
       existing.map((entry) => [entry.product.toString(), entry.textHash]),
     );

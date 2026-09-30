@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 const MODEL = "gemini-embedding-2";
 const DIMENSIONS = 768;
 const CHUNK_SIZE = 20;
+const QUERY_CACHE_SIZE = 2000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,6 +15,7 @@ export class EmbeddingService {
       return;
     }
     this.client = new GoogleGenAI({ apiKey });
+    this.queryCache = new Map();
   }
 
   isAvailable() {
@@ -22,7 +24,22 @@ export class EmbeddingService {
 
   async generateEmbedding(text, taskType = "RETRIEVAL_DOCUMENT") {
     if (!this.client) throw new Error("GEMINI_API_KEY not configured.");
-    return this.#embedWithRetry(text, taskType);
+    if (taskType !== "RETRIEVAL_QUERY") return this.#embedWithRetry(text, taskType);
+
+    const key = text.trim().toLowerCase();
+    const cached = this.queryCache.get(key);
+    if (cached) {
+      // Re-insert so the Map's order tracks recent use.
+      this.queryCache.delete(key);
+      this.queryCache.set(key, cached);
+      return cached;
+    }
+    const embedding = await this.#embedWithRetry(text, taskType);
+    this.queryCache.set(key, embedding);
+    if (this.queryCache.size > QUERY_CACHE_SIZE) {
+      this.queryCache.delete(this.queryCache.keys().next().value);
+    }
+    return embedding;
   }
 
   #isTransientError(err) {

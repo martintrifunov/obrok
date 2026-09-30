@@ -6,7 +6,7 @@ import { startScraperCron } from "./modules/scraper/scraper.cron.js";
 import { startAnalyticsCron } from "./modules/analytics/analytics.cron.js";
 import { seedChainImages } from "./infrastructure/database/seed-chain-images.js";
 import { seedFeatureFlags } from "./infrastructure/database/seed-feature-flags.js";
-import { scraperService, analyticsService, embeddingService, productEmbeddingRepository, featureFlagService, reportService } from "./container.js";
+import { scraperService, analyticsService, embeddingService, productEmbeddingRepository, vectorIndex, featureFlagService, reportService } from "./container.js";
 
 const PORT = process.env.PORT || 5000;
 // Docker sends SIGKILL 10s after SIGTERM; finish before that.
@@ -40,6 +40,13 @@ const registerShutdown = (server, cronTasks) => {
   process.on("SIGINT", () => shutdown("SIGINT"));
 };
 
+const prepareVectorIndex = async () => {
+  const packed = await productEmbeddingRepository.packLegacyEmbeddings();
+  if (packed) console.log(`[VectorIndex] Packed ${packed} legacy embeddings.`);
+  if (await featureFlagService.isEnabled("ai-search")) await vectorIndex.load();
+  vectorIndex.startAutoRefresh();
+};
+
 const start = async () => {
   await connectDB();
   console.log("Connected to MongoDB");
@@ -56,11 +63,13 @@ const start = async () => {
   await reportService.cleanupStaleReports();
 
   const cronTasks = [
-    startScraperCron(scraperService, embeddingService, productEmbeddingRepository, featureFlagService),
+    startScraperCron(scraperService, embeddingService, productEmbeddingRepository, featureFlagService, vectorIndex),
     startAnalyticsCron(analyticsService),
   ];
 
   const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  // Search works keyword-only until the index is ready.
+  prepareVectorIndex().catch((err) => console.error("[VectorIndex] Startup load failed:", err));
   registerShutdown(server, cronTasks);
 };
 

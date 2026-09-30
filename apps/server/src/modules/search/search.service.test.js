@@ -32,7 +32,7 @@ const { SearchService } = await import("./search.service.js");
 
 describe("SearchService", () => {
   let embeddingService;
-  let productEmbeddingRepository;
+  let vectorIndex;
   let featureFlagService;
   let service;
 
@@ -42,16 +42,17 @@ describe("SearchService", () => {
       generateEmbedding: vi.fn(),
       generateBatchEmbeddings: vi.fn(),
     };
-    productEmbeddingRepository = {
-      findAll: vi.fn().mockResolvedValue([]),
-      findByProducts: vi.fn().mockResolvedValue([]),
+    vectorIndex = {
+      isReady: vi.fn().mockReturnValue(true),
+      load: vi.fn().mockResolvedValue(undefined),
+      search: vi.fn().mockReturnValue([]),
     };
     featureFlagService = {
       isEnabled: vi.fn(),
     };
     service = new SearchService(
       embeddingService,
-      productEmbeddingRepository,
+      vectorIndex,
       featureFlagService,
     );
   });
@@ -75,6 +76,25 @@ describe("SearchService", () => {
       "леб",
       "RETRIEVAL_QUERY",
     );
+  });
+
+  it("embeds Latin queries in Cyrillic", async () => {
+    featureFlagService.isEnabled.mockResolvedValue(true);
+    embeddingService.generateEmbedding.mockResolvedValue([1, 0]);
+
+    await service.search({ q: "najeftin kaskaval", page: 1, limit: 10 });
+
+    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("каскавал", "RETRIEVAL_QUERY");
+  });
+
+  it("starts loading the index and answers keyword-only while it isn't ready", async () => {
+    featureFlagService.isEnabled.mockResolvedValue(true);
+    vectorIndex.isReady.mockReturnValue(false);
+
+    await service.search({ q: "леб", page: 1, limit: 10 });
+
+    expect(vectorIndex.load).toHaveBeenCalled();
+    expect(embeddingService.generateEmbedding).not.toHaveBeenCalled();
   });
 
   it("falls back to keyword-only when embeddings unavailable", async () => {

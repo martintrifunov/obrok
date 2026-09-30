@@ -12,6 +12,7 @@ import { EmbeddingService } from "../modules/search/embedding.service.js";
 import { IntentParserService } from "../modules/search/intent-parser.service.js";
 import { MealIntentRepository } from "../modules/search/meal-intent.repository.js";
 import { ProductEmbeddingRepository } from "../modules/search/product-embedding.repository.js";
+import { VectorIndex } from "../modules/search/vector-index.js";
 import { SearchService } from "../modules/search/search.service.js";
 import { SmartSearchService } from "../modules/search/smart-search.service.js";
 import "../modules/market/market.model.js";
@@ -148,9 +149,12 @@ async function main() {
   if (intentParserService.client) count(intentParserService.client.models, "generateContent", "llm");
 
   const alwaysOn = { isEnabled: async () => true };
+  const vectorIndex = new VectorIndex(new ProductEmbeddingRepository());
+  await vectorIndex.load();
+
   const searchService = new SearchService(
     embeddingService,
-    new ProductEmbeddingRepository(),
+    vectorIndex,
     alwaysOn,
   );
   const smartSearchService = new SmartSearchService(intentParserService, searchService, alwaysOn, null);

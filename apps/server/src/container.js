@@ -23,6 +23,7 @@ import { FeatureFlagService } from "./modules/feature-flag/feature-flag.service.
 import { FeatureFlagController } from "./modules/feature-flag/feature-flag.controller.js";
 import { SearchService } from "./modules/search/search.service.js";
 import { SearchController } from "./modules/search/search.controller.js";
+import { VectorIndex } from "./modules/search/vector-index.js";
 import { MealIntentRepository } from "./modules/search/meal-intent.repository.js";
 import { IntentParserService } from "./modules/search/intent-parser.service.js";
 import { SmartSearchService } from "./modules/search/smart-search.service.js";
@@ -95,9 +96,11 @@ const analyticsService = new AnalyticsService(analyticsRepository);
 
 const intentParserService = new IntentParserService(new MealIntentRepository());
 
+const vectorIndex = new VectorIndex(productEmbeddingRepository);
+
 const searchService = new SearchService(
   embeddingService,
-  productEmbeddingRepository,
+  vectorIndex,
   featureFlagService,
   analyticsService,
 );
@@ -141,6 +144,7 @@ export {
   featureFlagService,
   embeddingService,
   productEmbeddingRepository,
+  vectorIndex,
   productRepository,
   marketProductRepository,
   analyticsService,

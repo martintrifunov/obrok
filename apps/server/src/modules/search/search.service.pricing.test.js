@@ -62,7 +62,7 @@ const { SearchService } = await import("./search.service.js");
 
 describe("SearchService hides products without prices", () => {
   let embeddingService;
-  let productEmbeddingRepository;
+  let vectorIndex;
   let service;
 
   beforeEach(() => {
@@ -70,14 +70,15 @@ describe("SearchService hides products without prices", () => {
       isAvailable: vi.fn().mockReturnValue(true),
       generateEmbedding: vi.fn().mockResolvedValue([1, 0]),
     };
-    productEmbeddingRepository = {
-      findByProducts: vi.fn(async (ids) =>
-        ids.map((id) => ({ product: id, embedding: [1, 0] })),
-      ),
+    // The index knows every product, including the unpriced one.
+    vectorIndex = {
+      isReady: () => true,
+      load: vi.fn(),
+      search: vi.fn(() => products.map((p, i) => ({ productId: p._id, score: 1 - i / 10 }))),
     };
     service = new SearchService(
       embeddingService,
-      productEmbeddingRepository,
+      vectorIndex,
       { isEnabled: vi.fn().mockResolvedValue(true) },
     );
   });
@@ -90,11 +91,12 @@ describe("SearchService hides products without prices", () => {
     for (const r of result.data) expect(r.marketProducts.length).toBeGreaterThan(0);
   });
 
-  it("never loads embeddings for unpriced products", async () => {
+  it("drops unpriced products found by vector search", async () => {
     await service.searchProducts({ q: "млеко" });
 
-    const [candidates] = productEmbeddingRepository.findByProducts.mock.calls[0];
-    expect(candidates.map(String).sort()).toEqual(["p1", "p3"]);
+    expect(vectorIndex.search).toHaveBeenCalled();
+    const result = await service.searchProducts({ q: "млеко" });
+    expect(result.data.map((r) => r.product._id)).not.toContain("p2");
   });
 
   it("keyword-only search also drops unpriced products", async () => {

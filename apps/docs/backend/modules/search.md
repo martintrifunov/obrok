@@ -26,7 +26,9 @@ Dual-mode AI-powered search: hybrid vector+keyword search for products and smart
 | `intent-parser.service.js` | Gemini meal decomposition (recipe search only) |
 | `meal-intent.model.js` / `meal-intent.repository.js` | Saved meal decompositions |
 | `product-embedding.model.js` | Embedding vector storage |
-| `product-embedding.repository.js` | Embedding data access |
+| `product-embedding.repository.js` | Embedding data access, including the one-time packing migration |
+| `embedding-codec.js` | Packs embeddings as float32 bytes and reads them back |
+| `vector-index.js` | In-memory vector index used by vector search |
 
 ### Hybrid Search (SearchService)
 
@@ -44,7 +46,7 @@ flowchart TD
 ```
 
 1. **Query rules** (`query-rules.js`): price words such as "najeftin", "најевтино" or "najskapo" set the price preference and are removed along with filler words. Latin queries are transliterated to Cyrillic for the embedding. No AI call is made.
-2. **Parallel execution** of vector search (cosine similarity on embeddings) and keyword search (MongoDB text/regex).
+2. **Parallel execution** of vector search (nearest neighbours in the in-memory index, over the whole catalogue) and keyword search (MongoDB regex).
 3. **RRF merge** with k=60 to combine ranked results.
 4. **Price sort**: when a price preference is present, all merged results are sorted by their best price before paging, so page 1 holds the cheapest (or most expensive) results.
 5. **Market scoping** optimization when `marketId` is provided.
@@ -71,6 +73,22 @@ flowchart TD
 - **Task-type-aware prompts**: the raw text is wrapped differently depending on whether it's being embedded as a document (`title: ... | text: ...`) or a query (`task: search result | query: ...`), matching Gemini's retrieval-tuning convention for asymmetric search.
 - **Batch processing**: rate-limited at 350ms between batches.
 - **Retry**: exponential backoff on rate-limit and transient network errors (timeouts, DNS failures, connection resets).
+
+### Vector Index
+
+- **What**: every product embedding held in memory as an int8 vector with a per-row scale, about 70 MB for 93k products at 768 dims. A brute-force scan of the whole catalogue takes about 50 ms, and a single market's catalogue about 20 ms; top results match exact float scoring on 95 to 98% of the top 100.
+- **Why not query Mongo**: vector search used to regex-filter products by the query words and score only those, so it could never find a product that doesn't share a word with the query ("паста" could not find ФУСИЛИ). The index scores everything.
+- **Loading**: at startup, after the packing migration, when `ai-search` is on (about 2 s, in the background; search is keyword-only until it's ready). If `ai-search` is switched on later, the first search starts the load.
+- **Freshness**: reloaded after the scraper cron's embedding sync, and every 10 minutes if the newest embedding changed (covers `npm run scrape` and `npm run embeddings:generate`, which run in their own process).
+- **Unpriced products**: hits are filtered to products that still have a price, so deleted or delisted products in a not-yet-refreshed index never show up.
+
+### Embedding Storage
+
+Embeddings are stored as packed little-endian float32 bytes (3 KB each) instead of BSON number arrays (about 10 KB each). On the dev catalogue this took the collection from 933 MB to 300 MB. Existing arrays are converted by an idempotent migration at startup (`packLegacyEmbeddings`); run `db.runCommand({ compact: "product_embeddings" })` once afterwards to return the freed disk space.
+
+### Query Embedding Cache
+
+Query embeddings are cached in memory (2000 entries, least recently used evicted), so repeated searches and common meal ingredients don't call the embedding API again.
 
 ### Embedding Sync
 
@@ -110,5 +128,6 @@ When flags are disabled, search falls back to basic keyword-only behavior.
 |---------|----------|
 | Gemini API unavailable | Graceful degradation to keyword-only search |
 | Embedding generation fails | Products searchable via keyword only |
+| Vector index not loaded yet | Keyword-only results until the load finishes |
 | Meal decomposition fails | Query is redirected to product search; the failure is not cached |
 | Rate limit on embedding API | Exponential backoff retry |

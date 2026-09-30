@@ -10,19 +10,8 @@ const KEYWORD_LIMIT = 100;
 // Over-fetch before dropping products without prices, so they can't crowd out
 // priced ones in the top results.
 const KEYWORD_OVERFETCH = 500;
-
-const cosineSimilarity = (a, b) => {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
-};
+const VECTOR_LIMIT = 100;
+const VECTOR_OVERFETCH = 300;
 
 const buildFieldMatchClauses = (patterns, fields, mode = "and") => {
   if (!patterns.length) return {};
@@ -39,12 +28,12 @@ const buildFieldMatchClauses = (patterns, fields, mode = "and") => {
 export class SearchService {
   constructor(
     embeddingService,
-    productEmbeddingRepository,
+    vectorIndex,
     featureFlagService,
     analyticsService = null,
   ) {
     this.embeddingService = embeddingService;
-    this.productEmbeddingRepository = productEmbeddingRepository;
+    this.vectorIndex = vectorIndex;
     this.featureFlagService = featureFlagService;
     this.analyticsService = analyticsService;
   }
@@ -69,7 +58,7 @@ export class SearchService {
     const { searchTerms, embeddingText, priceSort } = parseSearchQuery(q);
 
     const [vectorResults, keywordResults] = await Promise.all([
-      this.#vectorSearch(searchTerms, embeddingText, marketId),
+      this.#vectorSearch(embeddingText, marketId),
       this.#keywordSearch(searchTerms, marketId),
     ]);
 
@@ -107,51 +96,37 @@ export class SearchService {
     return [...results].sort((a, b) => sortKey(a) - sortKey(b));
   }
 
-  async #vectorSearch(query, embeddingText, marketId) {
+  async #vectorSearch(embeddingText, marketId) {
     if (!this.embeddingService.isAvailable()) return [];
+    if (!this.vectorIndex.isReady()) {
+      // First search after ai-search was switched on: load in the background.
+      this.vectorIndex.load().catch((err) => console.error("[VectorIndex] Load failed:", err.message));
+      return [];
+    }
 
     const queryEmbedding = await this.embeddingService.generateEmbedding(
       embeddingText,
       "RETRIEVAL_QUERY",
     );
 
-    let candidateProductIds;
     if (marketId) {
-      // Scoped to one market — load only that market's products.
       const marketProducts = await MarketProductModel.find({
         market: new mongoose.Types.ObjectId(marketId),
       })
         .select("product")
         .lean()
         .exec();
-      candidateProductIds = marketProducts.map((mp) => mp.product);
-    } else {
-      // Global search — pre-filter by query tokens to avoid loading all embeddings.
-      const tokenPatterns = buildBilingualTokenRegexes(query);
-      if (!tokenPatterns.length) return [];
-      const keywordMatches = await ProductModel.find({
-        ...buildFieldMatchClauses(tokenPatterns, ["title", "category"], "or"),
-      })
-        .select("_id")
-        .limit(2000)
-        .lean()
-        .exec();
-      candidateProductIds = await this.#keepPriced(keywordMatches.map((p) => p._id));
+      return this.vectorIndex.search(queryEmbedding, {
+        k: VECTOR_LIMIT,
+        productIds: marketProducts.map((mp) => mp.product),
+      });
     }
 
-    if (candidateProductIds.length === 0) return [];
-
-    const embeddings = await this.productEmbeddingRepository.findByProducts(
-      candidateProductIds,
+    const hits = this.vectorIndex.search(queryEmbedding, { k: VECTOR_OVERFETCH });
+    const priced = new Set(
+      (await this.#keepPriced(hits.map((h) => new mongoose.Types.ObjectId(h.productId)))).map(String),
     );
-
-    const scored = embeddings.map((e) => ({
-      productId: e.product.toString(),
-      score: cosineSimilarity(queryEmbedding, e.embedding),
-    }));
-
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 100);
+    return hits.filter((h) => priced.has(h.productId)).slice(0, VECTOR_LIMIT);
   }
 
   async #keywordSearch(query, marketId) {

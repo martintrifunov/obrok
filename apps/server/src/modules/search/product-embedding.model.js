@@ -8,11 +8,14 @@ const ProductEmbeddingSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    embedding: { type: [Number], required: true },
+    // Packed float32 bytes (see embedding-codec.js); older rows may still be number arrays.
+    embedding: { type: Buffer, required: true },
     textHash: { type: String, required: true },
   },
   { timestamps: true },
 );
+
+ProductEmbeddingSchema.index({ updatedAt: -1 });
 
 export const ProductEmbeddingModel = mongoose.model(
   "ProductEmbedding",

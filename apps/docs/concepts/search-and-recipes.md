@@ -17,7 +17,7 @@ A pure keyword search fails on typos, synonyms, and bilingual input (Macedonian 
 ```mermaid
 flowchart TD
     A[User types a query] --> B[Query rules: product terms, price preference]
-    B --> C[Vector search: cosine similarity over product embeddings]
+    B --> C[Vector search: nearest products in an in-memory index of all embeddings]
     B --> D[Keyword search: MongoDB text/regex match]
     C --> E[Reciprocal Rank Fusion]
     D --> E
