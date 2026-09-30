@@ -41,7 +41,7 @@ flowchart LR
 | `apps/server/src/modules/scraper/scraper.registry.js` | Plugin registry |
 | `apps/server/src/modules/scraper/scraper.service.js` | Orchestrator (Puppeteer + concurrent tabs) |
 | `apps/server/src/modules/search/product-embedding-sync.service.js` | Incremental embedding sync |
-| `apps/server/src/modules/search/search.service.js` | Hybrid search (vector + keyword + RRF) |
+| `apps/server/src/modules/search/search.service.js` | Hybrid search (vector + keyword + fusion) |
 | `apps/server/src/modules/search/smart-search.service.js` | Recipe and budget-aware search |
 
 ## Risks and Trade-offs

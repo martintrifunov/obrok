@@ -19,14 +19,14 @@ flowchart TD
     A[User types a query] --> B[Query rules: product terms, price preference]
     B --> C[Vector search: nearest products in an in-memory index of all embeddings]
     B --> D[Keyword search: MongoDB text/regex match]
-    C --> E[Reciprocal Rank Fusion]
+    C --> E[Weighted score fusion]
     D --> E
     E --> F[Ranked, priced results]
 ```
 
 **Embeddings** are numeric vectors that place semantically similar text near each other in space, e.g. "тепсиско млеко" and "milk" end up close together even though they share no characters. Every product's title/description is embedded once (and re-embedded only when its text changes, via an incremental sync job); a query is embedded the same way at search time, and the two are compared by cosine similarity.
 
-**Reciprocal Rank Fusion (RRF)** is the merge step: instead of trying to make vector-similarity scores and keyword-match scores comparable (they're on different scales), RRF just uses each method's *rank position* for a product and combines `1 / (k + rank)` across both lists. A product that ranks well in either method surfaces near the top, without needing to calibrate the two scoring systems against each other.
+**The merge step** puts both signals on the same 0 to 1 scale and adds them with fixed weights (keyword 0.6, vector 0.4). The keyword score says how directly the title names the query: 1 if the title starts with it, 0.8 if every query word starts a word in the title, 0.4 for a looser match. The vector score is measured relative to the best vector hit, and hits more than 0.1 below it are dropped as unrelated. A product that both methods agree on ranks highest. When the query asks for the cheapest or most expensive, only the strong matches (within 80% of the best score) are sorted by price; weaker matches follow, so "cheapest milk" isn't led by a chocolate bar that mentions milk.
 
 ### Recipe Decomposition
 
@@ -55,7 +55,8 @@ Once markets are ranked by price completeness, straight-line (haversine) distanc
 
 | Path | Relevance |
 |------|-----------|
-| `apps/server/src/modules/search/search.service.js` | Hybrid search + RRF merge |
+| `apps/server/src/modules/search/search.service.js` | Hybrid search orchestration |
+| `apps/server/src/modules/search/hybrid-ranker.js` | Keyword scoring, score fusion, price sorting |
 | `apps/server/src/modules/search/smart-search.service.js` | Recipe decomposition, market ranking, budget logic |
 | `apps/server/src/modules/search/query-rules.js` | Price intent and query cleanup for product search |
 | `apps/server/src/modules/search/intent-parser.service.js` | Meal decomposition into ingredients |
@@ -68,4 +69,4 @@ Once markets are ranked by price completeness, straight-line (haversine) distanc
 
 - Both search paths depend on a third-party LLM provider being available; both degrade to keyword-only search or a raw-query pass-through if it isn't, rather than failing outright.
 - Recipe decomposition quality is bounded by the model's judgment for a given dish and phrasing, there is no way to verify an ingredient list is "correct" the way a curated recipe database would guarantee.
-- RRF's `k=60` constant and the embedding model's dimensionality (768) are tuning choices, not values derived from an evaluation against labeled relevance data.
+- The fusion weights, the vector window and the strong-match share are tuned against the cases in `npm run eval:search`, a small hand-written set rather than a large labeled relevance dataset.

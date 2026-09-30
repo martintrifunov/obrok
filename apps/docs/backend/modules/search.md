@@ -15,7 +15,8 @@ Dual-mode AI-powered search: hybrid vector+keyword search for products and smart
 | File | Role |
 |------|------|
 | `search.controller.js` | Hybrid search HTTP handler |
-| `search.service.js` | Hybrid search logic (vector + keyword + RRF) |
+| `search.service.js` | Hybrid search orchestration (vector + keyword + fusion) |
+| `hybrid-ranker.js` | Keyword relevance scores, weighted fusion, price sorting of strong matches |
 | `search.routes.js` | Search route definitions |
 | `smart-search.controller.js` | Smart/recipe search HTTP handler |
 | `smart-search.service.js` | Recipe decomposition + geolocation logic |
@@ -40,15 +41,15 @@ flowchart TD
     B --> C{Search terms + price preference}
     C --> D[Vector Search via Embeddings]
     C --> E[Keyword Search via MongoDB]
-    D --> F[Reciprocal Rank Fusion k=60]
+    D --> F[Weighted fusion: keyword 0.6, vector 0.4]
     E --> F
     F --> G[Price Sort + Return]
 ```
 
 1. **Query rules** (`query-rules.js`): price words such as "najeftin", "најевтино" or "najskapo" set the price preference and are removed along with filler words. Latin queries are transliterated to Cyrillic for the embedding. No AI call is made.
 2. **Parallel execution** of vector search (nearest neighbours in the in-memory index, over the whole catalogue) and keyword search (MongoDB regex).
-3. **RRF merge** with k=60 to combine ranked results.
-4. **Price sort**: when a price preference is present, all merged results are sorted by their best price before paging, so page 1 holds the cheapest (or most expensive) results.
+3. **Fusion** (`hybrid-ranker.js`): each keyword match gets a relevance score (1 if the title starts with the query, 0.8 if every query word starts a title word, 0.4 otherwise), fetched as two queries so titles starting with the query are never crowded out by the candidate cap. Every candidate also gets a vector score from the index. Scores are combined with weights 0.6 and 0.4; vector hits more than 0.1 below the best are dropped, and results under 0.2 are cut.
+4. **Price sort**: when a price preference is present, strong matches (at least 80% of the best score) are sorted by price across all results before paging; weaker matches follow in relevance order.
 5. **Market scoping** optimization when `marketId` is provided.
 
 ### Smart Search (SmartSearchService)

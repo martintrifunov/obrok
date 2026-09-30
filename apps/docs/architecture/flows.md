@@ -62,7 +62,7 @@ sequenceDiagram
   EMB-->>SS: Query vector
   SS->>DB: Vector + keyword search
   DB-->>SS: Matched products
-  SS-->>API: Ranked results (RRF merge)
+  SS-->>API: Ranked results (weighted fusion)
   API-->>UI: Search response
 ```
 
@@ -72,7 +72,7 @@ sequenceDiagram
 |------|-----------|
 | `apps/server/src/modules/scraper/scraper.cron.js` | Cron trigger for ingestion flow |
 | `apps/server/src/modules/scraper/scraper.service.js` | Scraper orchestration |
-| `apps/server/src/modules/search/search.service.js` | Hybrid search (vector + keyword + RRF) |
+| `apps/server/src/modules/search/search.service.js` | Hybrid search (vector + keyword + fusion) |
 | `apps/server/src/modules/search/smart-search.service.js` | Recipe and budget-aware search |
 | `apps/client/src/features/map/pages/MapPage.jsx` | User-facing search and routing UI |
 

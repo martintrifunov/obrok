@@ -1,15 +1,20 @@
 import mongoose from "mongoose";
-import { buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
+import { buildBilingualRegex, buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
 import { buildPaginationMeta } from "../../shared/utils/buildPaginationMeta.js";
 import { parseSearchQuery } from "./query-rules.js";
+import { buildKeywordScorer, fuseResults, sortStrongByPrice } from "./hybrid-ranker.js";
 import { ProductModel } from "../product/product.model.js";
 import { MarketProductModel } from "../product/market-product.model.js";
 
-const RRF_K = 60;
 const KEYWORD_LIMIT = 100;
 // Over-fetch before dropping products without prices, so they can't crowd out
 // priced ones in the top results.
 const KEYWORD_OVERFETCH = 500;
+// Titles that start with the query are the best matches; fetch them apart so
+// the general cap can't crowd them out.
+const TITLE_START_LIMIT = 1500;
+// One market's catalogue is small enough to score every match.
+const MARKET_KEYWORD_LIMIT = 3000;
 const VECTOR_LIMIT = 100;
 const VECTOR_OVERFETCH = 300;
 
@@ -57,12 +62,16 @@ export class SearchService {
   async searchProducts({ q, marketId, page = 1, limit = 10 }) {
     const { searchTerms, embeddingText, priceSort } = parseSearchQuery(q);
 
-    const [vectorResults, keywordResults] = await Promise.all([
-      this.#vectorSearch(embeddingText, marketId),
-      this.#keywordSearch(searchTerms, marketId),
+    const [queryEmbedding, keywordResults] = await Promise.all([
+      this.#embedQuery(embeddingText),
+      // A price sort must see every match, not just the best-named 100.
+      this.#keywordSearch(searchTerms, marketId, priceSort ? KEYWORD_OVERFETCH : KEYWORD_LIMIT),
     ]);
+    const vectorResults = queryEmbedding
+      ? await this.#vectorSearch(queryEmbedding, marketId, keywordResults)
+      : [];
 
-    let merged = this.#rrfMerge(vectorResults, keywordResults);
+    let merged = fuseResults(vectorResults, keywordResults);
     if (priceSort) merged = await this.#sortByPrice(merged, marketId, priceSort);
 
     const total = merged.length;
@@ -88,27 +97,31 @@ export class SearchService {
       { $group: { _id: "$product", min: { $min: "$price" }, max: { $max: "$price" } } },
     ]);
     const byProduct = new Map(prices.map((p) => [p._id.toString(), p]));
-    const sortKey = ({ productId }) => {
-      const p = byProduct.get(productId);
+    /** @param {{ productId: string, score: number }} result */
+    const sortKey = (result) => {
+      const p = byProduct.get(result.productId);
       if (!p) return Infinity;
       return priceSort === "asc" ? p.min : -p.max;
     };
-    return [...results].sort((a, b) => sortKey(a) - sortKey(b));
+    return sortStrongByPrice(results, sortKey);
   }
 
-  async #vectorSearch(embeddingText, marketId) {
-    if (!this.embeddingService.isAvailable()) return [];
+  async #embedQuery(embeddingText) {
+    if (!this.embeddingService.isAvailable()) return null;
     if (!this.vectorIndex.isReady()) {
       // First search after ai-search was switched on: load in the background.
       this.vectorIndex.load().catch((err) => console.error("[VectorIndex] Load failed:", err.message));
-      return [];
+      return null;
     }
+    return this.embeddingService.generateEmbedding(embeddingText, "RETRIEVAL_QUERY");
+  }
 
-    const queryEmbedding = await this.embeddingService.generateEmbedding(
-      embeddingText,
-      "RETRIEVAL_QUERY",
-    );
-
+  /**
+   * Nearest products, plus a vector score for every keyword match so both
+   * signals are known for each candidate.
+   */
+  async #vectorSearch(queryEmbedding, marketId, keywordHits) {
+    let hits;
     if (marketId) {
       const marketProducts = await MarketProductModel.find({
         market: new mongoose.Types.ObjectId(marketId),
@@ -116,23 +129,29 @@ export class SearchService {
         .select("product")
         .lean()
         .exec();
-      return this.vectorIndex.search(queryEmbedding, {
+      hits = this.vectorIndex.search(queryEmbedding, {
         k: VECTOR_LIMIT,
         productIds: marketProducts.map((mp) => mp.product),
       });
+    } else {
+      const nearest = this.vectorIndex.search(queryEmbedding, { k: VECTOR_OVERFETCH });
+      const priced = new Set(
+        (await this.#keepPriced(nearest.map((h) => new mongoose.Types.ObjectId(h.productId)))).map(String),
+      );
+      hits = nearest.filter((h) => priced.has(h.productId)).slice(0, VECTOR_LIMIT);
     }
 
-    const hits = this.vectorIndex.search(queryEmbedding, { k: VECTOR_OVERFETCH });
-    const priced = new Set(
-      (await this.#keepPriced(hits.map((h) => new mongoose.Types.ObjectId(h.productId)))).map(String),
-    );
-    return hits.filter((h) => priced.has(h.productId)).slice(0, VECTOR_LIMIT);
+    const seen = new Set(hits.map((h) => h.productId));
+    const unscored = keywordHits.map((h) => h.productId).filter((id) => !seen.has(id));
+    const extra = this.vectorIndex.search(queryEmbedding, { k: unscored.length, productIds: unscored });
+    return [...hits, ...extra].sort((a, b) => b.score - a.score);
   }
 
-  async #keywordSearch(query, marketId) {
+  async #keywordSearch(query, marketId, limit) {
     const tokenPatterns = buildBilingualTokenRegexes(query);
     if (!tokenPatterns.length) return [];
 
+    let candidates;
     if (marketId) {
       const pipeline = [
         { $match: { market: new mongoose.Types.ObjectId(marketId) } },
@@ -152,30 +171,41 @@ export class SearchService {
             "and",
           ),
         },
-        { $limit: KEYWORD_LIMIT },
-        { $project: { "product._id": 1 } },
+        { $limit: MARKET_KEYWORD_LIMIT },
+        { $project: { "product._id": 1, "product.title": 1, "product.category": 1 } },
       ];
-
-      const results = await MarketProductModel.aggregate(pipeline);
-      return results.map((r, i) => ({
-        productId: r.product._id.toString(),
-        score: 1 / (i + 1),
-      }));
+      candidates = (await MarketProductModel.aggregate(pipeline)).map((r) => r.product);
+    } else {
+      const phrase = buildBilingualRegex(query.trim());
+      const [titleStarts, general] = await Promise.all([
+        phrase
+          ? ProductModel.find({ title: { $regex: `^(?:${phrase})`, $options: "i" } })
+            .select("_id title category")
+            .limit(TITLE_START_LIMIT)
+            .lean()
+            .exec()
+          : [],
+        ProductModel.find({
+          ...buildFieldMatchClauses(tokenPatterns, ["title", "category"], "and"),
+        })
+          .select("_id title category")
+          .limit(KEYWORD_OVERFETCH)
+          .lean()
+          .exec(),
+      ]);
+      const byId = new Map([...general, ...titleStarts].map((p) => [String(p._id), p]));
+      const products = [...byId.values()];
+      const priced = new Set((await this.#keepPriced(products.map((p) => p._id))).map(String));
+      candidates = products.filter((p) => priced.has(String(p._id)));
     }
 
-    const products = await ProductModel.find({
-      ...buildFieldMatchClauses(tokenPatterns, ["title", "category"], "and"),
-    })
-      .select("_id")
-      .limit(KEYWORD_OVERFETCH)
-      .lean()
-      .exec();
-    const priced = await this.#keepPriced(products.map((p) => p._id));
-
-    return priced.slice(0, KEYWORD_LIMIT).map((id, i) => ({
-      productId: id.toString(),
-      score: 1 / (i + 1),
-    }));
+    const score = buildKeywordScorer(query);
+    return candidates
+      .map((p) => ({ productId: p._id.toString(), score: score(p), length: (p.title || "").length }))
+      // Among equal scores, shorter titles name the product more directly.
+      .sort((a, b) => b.score - a.score || a.length - b.length)
+      .slice(0, limit)
+      .map(({ productId, score: s }) => ({ productId, score: s }));
   }
 
   async #keepPriced(productIds) {
@@ -185,24 +215,6 @@ export class SearchService {
     });
     const priced = new Set(pricedIds.map((id) => id.toString()));
     return productIds.filter((id) => priced.has(id.toString()));
-  }
-
-  #rrfMerge(vectorResults, keywordResults) {
-    const scores = new Map();
-
-    vectorResults.forEach(({ productId }, rank) => {
-      const prev = scores.get(productId) || 0;
-      scores.set(productId, prev + 1 / (RRF_K + rank + 1));
-    });
-
-    keywordResults.forEach(({ productId }, rank) => {
-      const prev = scores.get(productId) || 0;
-      scores.set(productId, prev + 1 / (RRF_K + rank + 1));
-    });
-
-    return Array.from(scores.entries())
-      .map(([productId, score]) => ({ productId, score }))
-      .sort((a, b) => b.score - a.score);
   }
 
   async #hydrateResults(results, marketId, priceSort = null) {

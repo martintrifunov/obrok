@@ -19,6 +19,7 @@ import "../modules/market/market.model.js";
 import "../modules/chain/chain.model.js";
 import "../modules/image/image.model.js";
 import { searchCases, ingredientCases, mealCases } from "./search-eval/cases.js";
+import { transliterateLatinToCyrillic } from "../shared/utils/bilingualRegex.js";
 
 const TOP_K = 5;
 const args = process.argv.slice(2);
@@ -45,11 +46,18 @@ const timed = async (fn) => {
  * @param {string} title
  * @param {{ expect: RegExp, forbid?: RegExp }} testCase
  */
-const relevant = (title, { expect, forbid }) =>
-  expect.test(title) && !(forbid && forbid.test(title));
+const relevant = (title, { expect, forbid }) => {
+  // Cases are written in Cyrillic; Latin titles ("DOMATI REFUS") are checked in both scripts.
+  const spellings = [title, transliterateLatinToCyrillic(title)];
+  return spellings.some((t) => expect.test(t)) && !spellings.some((t) => forbid?.test(t));
+};
 
-const bestPrice = (result) =>
-  result.marketProducts.length ? Math.min(...result.marketProducts.map((mp) => mp.price)) : Infinity;
+/** The price a sort by `dir` ranks on: cheapest store for "asc", priciest for "desc". */
+const rankedPrice = (result, dir) => {
+  const prices = result.marketProducts.map((mp) => mp.price);
+  if (!prices.length) return dir === "asc" ? Infinity : -Infinity;
+  return dir === "asc" ? Math.min(...prices) : Math.max(...prices);
+};
 
 const percentile = (values, p) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -68,8 +76,8 @@ async function evalSearch(searchService) {
     let priceOk = null;
     if (c.priceSort) {
       const page2 = await searchService.searchProducts({ q: c.q, page: 2, limit: 10 });
-      const p1 = value.data.map(bestPrice);
-      const p2 = page2.data.map(bestPrice);
+      const p1 = value.data.map((r) => rankedPrice(r, c.priceSort));
+      const p2 = page2.data.map((r) => rankedPrice(r, c.priceSort));
       priceOk =
         value.priceSort === c.priceSort &&
         (c.priceSort === "asc"
