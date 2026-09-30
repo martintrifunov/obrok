@@ -132,7 +132,9 @@ const RichTextEditor = ({ value, onChange, error }) => {
   );
 };
 
-const EditorContainer = styled(Box)(({ theme, $isError }) => ({
+const EditorContainer = styled(Box, {
+  shouldForwardProp: (prop) => prop !== "$isError",
+})(({ theme, $isError }) => ({
   width: "100%",
   display: "flex",
   flexDirection: "column",

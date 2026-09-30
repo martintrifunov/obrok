@@ -34,6 +34,7 @@ const TermsAndPrivacyModal = ({ open, onAccept }) => {
       }}
     >
       <DialogTitle
+        component="div"
         sx={{
           p: 3,
           pb: 2,
