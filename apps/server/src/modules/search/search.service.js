@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
 import { buildPaginationMeta } from "../../shared/utils/buildPaginationMeta.js";
+import { parseSearchQuery } from "./query-rules.js";
 import { ProductModel } from "../product/product.model.js";
 import { MarketProductModel } from "../product/market-product.model.js";
 
@@ -40,13 +41,11 @@ export class SearchService {
     embeddingService,
     productEmbeddingRepository,
     featureFlagService,
-    intentParserService,
     analyticsService = null,
   ) {
     this.embeddingService = embeddingService;
     this.productEmbeddingRepository = productEmbeddingRepository;
     this.featureFlagService = featureFlagService;
-    this.intentParserService = intentParserService;
     this.analyticsService = analyticsService;
   }
 
@@ -66,40 +65,53 @@ export class SearchService {
     return this.searchProducts({ q, marketId, page, limit });
   }
 
-  async searchProducts({ q, marketId, page = 1, limit = 10, parseIntent = true }) {
-    // Parse intent to extract clean search terms and price sorting preference
-    const intent = parseIntent && this.intentParserService?.isAvailable()
-      ? await this.intentParserService.parseIntent(q)
-      : { searchTerms: q, priceSort: null, intent: "search", products: [] };
-
-    const searchQuery = intent.searchTerms || q;
+  async searchProducts({ q, marketId, page = 1, limit = 10 }) {
+    const { searchTerms, embeddingText, priceSort } = parseSearchQuery(q);
 
     const [vectorResults, keywordResults] = await Promise.all([
-      this.#vectorSearch(searchQuery, marketId),
-      this.#keywordSearch(searchQuery, marketId),
+      this.#vectorSearch(searchTerms, embeddingText, marketId),
+      this.#keywordSearch(searchTerms, marketId),
     ]);
 
-    const merged = this.#rrfMerge(vectorResults, keywordResults);
+    let merged = this.#rrfMerge(vectorResults, keywordResults);
+    if (priceSort) merged = await this.#sortByPrice(merged, marketId, priceSort);
 
     const total = merged.length;
     const skip = (page - 1) * limit;
     const paginated = merged.slice(skip, skip + limit);
 
     // Hydrate with full product data + market info
-    const hydrated = await this.#hydrateResults(paginated, marketId, intent.priceSort);
+    const hydrated = await this.#hydrateResults(paginated, marketId, priceSort);
 
     return {
       data: hydrated,
       pagination: buildPaginationMeta({ total, page, limit }),
-      priceSort: intent.priceSort,
+      priceSort,
     };
   }
 
-  async #vectorSearch(query, marketId) {
+  async #sortByPrice(results, marketId, priceSort) {
+    if (!results.length) return results;
+    const match = { product: { $in: results.map((r) => new mongoose.Types.ObjectId(r.productId)) } };
+    if (marketId) match.market = new mongoose.Types.ObjectId(marketId);
+    const prices = await MarketProductModel.aggregate([
+      { $match: match },
+      { $group: { _id: "$product", min: { $min: "$price" }, max: { $max: "$price" } } },
+    ]);
+    const byProduct = new Map(prices.map((p) => [p._id.toString(), p]));
+    const sortKey = ({ productId }) => {
+      const p = byProduct.get(productId);
+      if (!p) return Infinity;
+      return priceSort === "asc" ? p.min : -p.max;
+    };
+    return [...results].sort((a, b) => sortKey(a) - sortKey(b));
+  }
+
+  async #vectorSearch(query, embeddingText, marketId) {
     if (!this.embeddingService.isAvailable()) return [];
 
     const queryEmbedding = await this.embeddingService.generateEmbedding(
-      query,
+      embeddingText,
       "RETRIEVAL_QUERY",
     );
 
@@ -253,7 +265,7 @@ export class SearchService {
       mpByProduct.get(pid).push(mp);
     }
 
-    let hydrated = results.map(({ productId, score }) => {
+    return results.map(({ productId, score }) => {
       const product = productMap.get(productId);
       let mps = (mpByProduct.get(productId) || []).map((mp) => ({
         price: mp.price,
@@ -268,17 +280,5 @@ export class SearchService {
 
       return { product, score, marketProducts: mps };
     });
-
-    // Re-sort products by their best available price when price intent detected
-    if (priceSort) {
-      const dir = priceSort === "asc" ? 1 : -1;
-      hydrated.sort((a, b) => {
-        const priceA = a.marketProducts.length ? a.marketProducts[0].price : Infinity;
-        const priceB = b.marketProducts.length ? b.marketProducts[0].price : Infinity;
-        return (priceA - priceB) * dir;
-      });
-    }
-
-    return hydrated;
   }
 }

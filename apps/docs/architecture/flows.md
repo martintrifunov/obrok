@@ -57,7 +57,7 @@ sequenceDiagram
   participant EMB as Embedding Service
   participant DB as MongoDB
   UI->>API: Search query
-  API->>SS: Parse intent and execute strategy
+  API->>SS: Read query (rules; AI only to split meals) and execute strategy
   SS->>EMB: Generate query embedding
   EMB-->>SS: Query vector
   SS->>DB: Vector + keyword search

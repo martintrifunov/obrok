@@ -47,9 +47,6 @@ describe("SmartSearchService", () => {
 
     expect(searchService.search).not.toHaveBeenCalled();
     expect(searchService.searchProducts).toHaveBeenCalledTimes(2);
-    for (const [args] of searchService.searchProducts.mock.calls) {
-      expect(args.parseIntent).toBe(false);
-    }
     expect(intentParserService.parseIntent).toHaveBeenCalledTimes(1);
     expect(result.data.shoppingList).toEqual([
       { name: "брашно", found: true },

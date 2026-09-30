@@ -6,7 +6,7 @@ title: Search & Recipe Decomposition
 
 ## Public Summary
 
-Obrok answers two different kinds of questions with two different search paths: "where is milk cheapest" (hybrid product search) and "I want to cook tavče gravče this week, where should I shop" (recipe search). Both start from the same free-text box; an AI intent-parsing step decides which path a query takes.
+Obrok answers two different kinds of questions with two different search paths: "where is milk cheapest" (hybrid product search) and "I want to cook tavče gravče this week, where should I shop" (recipe search). Product search reads the query with simple rules (price words, filler words, script) and never calls a language model. Recipe search asks a small language model to split the meal into ingredients, and saves that answer so each dish is decomposed only once.
 
 ## Internal Details
 
@@ -16,7 +16,7 @@ A pure keyword search fails on typos, synonyms, and bilingual input (Macedonian 
 
 ```mermaid
 flowchart TD
-    A[User types a query] --> B[Intent Parser: language, product terms, price preference]
+    A[User types a query] --> B[Query rules: product terms, price preference]
     B --> C[Vector search: cosine similarity over product embeddings]
     B --> D[Keyword search: MongoDB text/regex match]
     C --> E[Reciprocal Rank Fusion]
@@ -30,11 +30,11 @@ flowchart TD
 
 ### Recipe Decomposition
 
-When the intent parser classifies a query as a recipe (e.g. "тавче гравче за 4 луѓе") rather than a product lookup, the flow changes:
+For a meal (e.g. "тавче гравче за 4 луѓе") the flow changes:
 
 ```mermaid
 flowchart TD
-    A[Recipe query] --> B[Intent Parser decomposes into ingredient list]
+    A[Recipe query] --> B[Saved decomposition, or the language model splits it into ingredients]
     B --> C[Hybrid search runs per ingredient, in parallel]
     C --> D[Group results by market: which markets carry which ingredients, at what price]
     D --> E[Rank markets: complete match first, then within-budget, then match count, then distance, then price]
@@ -57,7 +57,8 @@ Once markets are ranked by price completeness, straight-line (haversine) distanc
 |------|-----------|
 | `apps/server/src/modules/search/search.service.js` | Hybrid search + RRF merge |
 | `apps/server/src/modules/search/smart-search.service.js` | Recipe decomposition, market ranking, budget logic |
-| `apps/server/src/modules/search/intent-parser.service.js` | Query classification and ingredient decomposition |
+| `apps/server/src/modules/search/query-rules.js` | Price intent and query cleanup for product search |
+| `apps/server/src/modules/search/intent-parser.service.js` | Meal decomposition into ingredients |
 | `apps/server/src/modules/search/embedding.service.js` | Embedding generation |
 | `apps/server/src/shared/utils/obrokBudget.js` | Weekly budget calculation |
 | `apps/server/src/shared/utils/haversine.js` | Distance calculation |

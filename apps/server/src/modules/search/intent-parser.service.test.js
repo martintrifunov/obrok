@@ -6,6 +6,7 @@ vi.mock("@google/genai", () => ({
   GoogleGenAI: class {
     models = { generateContent };
   },
+  Type: { OBJECT: "OBJECT", STRING: "STRING", ARRAY: "ARRAY" },
 }));
 
 const { IntentParserService } = await import("./intent-parser.service.js");
@@ -47,6 +48,41 @@ describe("IntentParserService", () => {
     const result = await sut.parseIntent("палачинки");
 
     expect(result.products).toEqual(["брашно", "јајца"]);
+  });
+
+  it("reuses a saved meal instead of calling the model", async () => {
+    const repo = {
+      findByKey: vi.fn().mockResolvedValue({ intent: "recipe", products: ["брашно", "јајца"] }),
+      save: vi.fn(),
+    };
+    const sut = new IntentParserService(repo);
+
+    const result = await sut.parseIntent("Palačinki");
+
+    expect(generateContent).not.toHaveBeenCalled();
+    expect(repo.findByKey).toHaveBeenCalledWith("палачинки");
+    expect(result).toMatchObject({ intent: "recipe", products: ["брашно", "јајца"] });
+  });
+
+  it("saves a new meal and takes price intent from the query, not the model", async () => {
+    generateContent.mockResolvedValue({ text: JSON.stringify({ ...recipe, priceSort: "desc" }) });
+    const repo = { findByKey: vi.fn().mockResolvedValue(null), save: vi.fn().mockResolvedValue({}) };
+    const sut = new IntentParserService(repo);
+
+    const result = await sut.parseIntent("najeftini palachinki");
+
+    expect(repo.save).toHaveBeenCalledWith(expect.any(String), {
+      intent: "recipe",
+      products: ["брашно", "јајца"],
+    });
+    expect(result.priceSort).toBe("asc");
+  });
+
+  it("treats a recipe with no ingredients as a plain search", async () => {
+    generateContent.mockResolvedValue({ text: JSON.stringify({ intent: "recipe", products: [] }) });
+    const sut = new IntentParserService();
+
+    expect(await sut.parseIntent("нешто")).toMatchObject({ intent: "search", products: [] });
   });
 
   it("does not cache the fallback when every model fails", async () => {

@@ -83,7 +83,7 @@ describe("SearchService hides products without prices", () => {
   });
 
   it("returns only priced products and counts only them", async () => {
-    const result = await service.searchProducts({ q: "млеко", parseIntent: false });
+    const result = await service.searchProducts({ q: "млеко" });
 
     expect(result.data.map((r) => r.product._id).sort()).toEqual(["p1", "p3"]);
     expect(result.pagination.total).toBe(2);
@@ -91,7 +91,7 @@ describe("SearchService hides products without prices", () => {
   });
 
   it("never loads embeddings for unpriced products", async () => {
-    await service.searchProducts({ q: "млеко", parseIntent: false });
+    await service.searchProducts({ q: "млеко" });
 
     const [candidates] = productEmbeddingRepository.findByProducts.mock.calls[0];
     expect(candidates.map(String).sort()).toEqual(["p1", "p3"]);
@@ -99,7 +99,7 @@ describe("SearchService hides products without prices", () => {
 
   it("keyword-only search also drops unpriced products", async () => {
     embeddingService.isAvailable.mockReturnValue(false);
-    const result = await service.searchProducts({ q: "млеко", parseIntent: false });
+    const result = await service.searchProducts({ q: "млеко" });
 
     expect(result.data.map((r) => r.product._id).sort()).toEqual(["p1", "p3"]);
     expect(result.pagination.total).toBe(2);

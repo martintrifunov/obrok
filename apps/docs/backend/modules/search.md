@@ -22,7 +22,9 @@ Dual-mode AI-powered search: hybrid vector+keyword search for products and smart
 | `smart-search.routes.js` | Smart search route definitions |
 | `embedding.service.js` | Gemini embedding generation |
 | `product-embedding-sync.service.js` | Incremental embedding sync |
-| `intent-parser.service.js` | Gemini intent/query parsing |
+| `query-rules.js` | Rule-based price intent and query cleanup (no AI call) |
+| `intent-parser.service.js` | Gemini meal decomposition (recipe search only) |
+| `meal-intent.model.js` / `meal-intent.repository.js` | Saved meal decompositions |
 | `product-embedding.model.js` | Embedding vector storage |
 | `product-embedding.repository.js` | Embedding data access |
 
@@ -32,8 +34,8 @@ Dual-mode AI-powered search: hybrid vector+keyword search for products and smart
 
 ```mermaid
 flowchart TD
-    A[User Query] --> B[Intent Parser]
-    B --> C{Parse Result}
+    A[User Query] --> B[Query Rules]
+    B --> C{Search terms + price preference}
     C --> D[Vector Search via Embeddings]
     C --> E[Keyword Search via MongoDB]
     D --> F[Reciprocal Rank Fusion k=60]
@@ -41,10 +43,11 @@ flowchart TD
     F --> G[Price Sort + Return]
 ```
 
-1. **Intent parsing** via Gemini (with a lighter fallback model) — detects search terms, price preference, language.
+1. **Query rules** (`query-rules.js`): price words such as "najeftin", "најевтино" or "najskapo" set the price preference and are removed along with filler words. Latin queries are transliterated to Cyrillic for the embedding. No AI call is made.
 2. **Parallel execution** of vector search (cosine similarity on embeddings) and keyword search (MongoDB text/regex).
 3. **RRF merge** with k=60 to combine ranked results.
-4. **Market scoping** optimization when `marketId` is provided.
+4. **Price sort**: when a price preference is present, all merged results are sorted by their best price before paging, so page 1 holds the cheapest (or most expensive) results.
+5. **Market scoping** optimization when `marketId` is provided.
 
 ### Smart Search (SmartSearchService)
 
@@ -77,10 +80,14 @@ flowchart TD
 
 ### Intent Parser Service
 
-- **Model**: Gemini, with a lighter fallback model if the primary is unavailable; exact model ids in `intent-parser.service.js` (`MODELS` constant).
-- **Bilingual**: Cyrillic + Latin Macedonian
-- **Detects**: recipe vs. product search, price preference (asc/desc), ingredient decomposition
-- **Cache**: 5-minute local cache, 500 entry max
+- **Used by**: recipe search only. Product search never calls it.
+- **Model**: Gemini Flash-Lite, with a second Flash-Lite model as fallback; exact model ids in `intent-parser.service.js` (`MODELS` constant).
+- **Output**: `{ intent, products }` through a response schema. Ingredients are named the way Macedonian supermarkets label them. Price preference comes from the query rules, not the model.
+- **Cache**: every decomposition is saved in the `meal_intents` collection, keyed so Latin and Cyrillic spellings of a meal share an entry, and kept for 180 days (TTL index). A 500-entry in-memory cache sits in front. Failed parses are not cached.
+
+### Evaluation
+
+`npm run eval:search` scores product search, meal ingredient picks and meal decomposition against the live catalogue, using the cases in `src/scripts/search-eval/cases.js`, and reports latency and AI call counts. Run it inside the API container (`docker exec obrok_api npm run eval:search`) before and after any search change. Flags: `--no-meals` skips the AI decomposition cases, `--no-meal-cache` bypasses saved meals, `--json=<file>` saves the results.
 
 ### Feature Flag Gates
 
@@ -103,5 +110,5 @@ When flags are disabled, search falls back to basic keyword-only behavior.
 |---------|----------|
 | Gemini API unavailable | Graceful degradation to keyword-only search |
 | Embedding generation fails | Products searchable via keyword only |
-| Intent parsing fails | Raw query used as-is |
+| Meal decomposition fails | Query is redirected to product search; the failure is not cached |
 | Rate limit on embedding API | Exponential backoff retry |

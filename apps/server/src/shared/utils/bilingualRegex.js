@@ -124,7 +124,7 @@ export const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalize = (text) => text.normalize("NFC").toLowerCase();
 
-const transliterateLatinToCyrillic = (text) => {
+export const transliterateLatinToCyrillic = (text) => {
   let cyrStr = normalize(text);
   for (const [lat, cyr] of Object.entries(latToCyrMap)) {
     cyrStr = cyrStr.split(lat).join(cyr);

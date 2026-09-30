@@ -13,7 +13,7 @@ const FALLBACK_RESULTS = 3;
 
 /**
  * @param {string} ingredient
- * @param {Array<{ product: { title?: string }, marketProducts: Array<object> }>} results
+ * @param {Array<{ product: { title?: string }, marketProducts: Array<{ price: number, market?: any }> }>} results
  */
 export const pickIngredientCandidates = (ingredient, results) => {
   const matches = buildWordStartMatcher(ingredient);
@@ -69,57 +69,27 @@ export class SmartSearchService {
       return { data: null, redirect: true, intent };
     }
 
-    // Search for each product in parallel
-    const productSearches = await Promise.all(
-      intent.products.map(async (productName) => {
-        const result = await this.searchService.searchProducts({
-          q: productName,
-          page: 1,
-          limit: 20,
-          parseIntent: false,
-        });
-        return { name: productName, ...pickIngredientCandidates(productName, result.data) };
-      }),
+    const ingredients = await Promise.all(
+      intent.products.map((name) => this.findIngredient(name)),
     );
 
     // Build a shopping list with match status: found means some market sells it.
-    const shoppingList = productSearches.map((ps) => ({
-      name: ps.name,
-      found: ps.results.some((r) => r.marketProducts.some((mp) => mp.market?._id)),
+    const shoppingList = ingredients.map(({ name, offers }) => ({
+      name,
+      found: offers.size > 0,
     }));
 
-    // Collect all markets that carry at least one product
     // Structure: Map<marketId, { market, products: Map<productName, { product, price }> }>
     const marketMap = new Map();
-
-    for (const ps of productSearches) {
-      for (const result of ps.results) {
-        for (const mp of result.marketProducts) {
-          if (!mp.market?._id) continue;
-          const mid = mp.market._id.toString();
-
-          if (!marketMap.has(mid)) {
-            marketMap.set(mid, {
-              market: mp.market,
-              products: new Map(),
-            });
-          }
-
-          const entry = marketMap.get(mid);
-          const existing = entry.products.get(ps.name);
-
-          // Among real matches keep the cheapest per market; for fallback
-          // results (no real match) keep the best-ranked instead.
-          const better = ps.strict
-            ? !existing || mp.price < existing.price
-            : !existing;
-          if (better) {
-            entry.products.set(ps.name, {
-              product: result.product,
-              price: mp.price,
-            });
-          }
+    for (const { name, offers } of ingredients) {
+      for (const [mid, offer] of offers) {
+        if (!marketMap.has(mid)) {
+          marketMap.set(mid, { market: offer.market, products: new Map() });
         }
+        marketMap.get(mid).products.set(name, {
+          product: offer.product,
+          price: offer.price,
+        });
       }
     }
 
@@ -216,6 +186,35 @@ export class SmartSearchService {
         },
       },
     };
+  }
+
+  /**
+   * @param {string} name
+   * @returns {Promise<{ name: string, strict: boolean, offers: Map<string, { market: any, product: any, price: number }> }>}
+   */
+  async findIngredient(name) {
+    const result = await this.searchService.searchProducts({
+      q: name,
+      page: 1,
+      limit: 20,
+    });
+    const { results, strict } = pickIngredientCandidates(name, result.data);
+
+    const offers = new Map();
+    for (const candidate of results) {
+      for (const mp of candidate.marketProducts) {
+        if (!mp.market?._id) continue;
+        const mid = mp.market._id.toString();
+        const existing = offers.get(mid);
+        // Among real matches keep the cheapest per market; for fallback
+        // results (no real match) keep the best-ranked instead.
+        const better = strict ? !existing || mp.price < existing.price : !existing;
+        if (better) {
+          offers.set(mid, { market: mp.market, product: candidate.product, price: mp.price });
+        }
+      }
+    }
+    return { name, strict, offers };
   }
 
   #getMondayOfWeek(date) {
