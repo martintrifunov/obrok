@@ -19,7 +19,8 @@ export const validateRequest = (schema, source = "body") => {
         if (!formattedErrors[key]) {
           let msg = issue.message;
 
-          if (issue.code === "invalid_type") {
+          // Replace only Zod's default wording, so schema messages come through.
+          if (issue.code === "invalid_type" && msg.startsWith("Invalid input")) {
             msg = "This field cannot be blank.";
           }
 
