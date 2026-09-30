@@ -233,6 +233,22 @@ export class MarketProductRepository {
     }).exec();
   }
 
+  /** Products with scraper-owned price rows at these markets. */
+  async findScrapedProductIdsByMarkets(marketIds) {
+    return MarketProductModel.distinct("product", {
+      market: { $in: marketIds },
+      lastSeenAt: { $ne: null },
+    }).exec();
+  }
+
+  /** Deletes scraper-owned price rows at these markets; hand-added ones stay. */
+  async deleteScrapedByMarkets(marketIds) {
+    return MarketProductModel.deleteMany({
+      market: { $in: marketIds },
+      lastSeenAt: { $ne: null },
+    }).exec();
+  }
+
   async findProductIdsByMarket(marketId) {
     return MarketProductModel.distinct("product", { market: marketId }).exec();
   }

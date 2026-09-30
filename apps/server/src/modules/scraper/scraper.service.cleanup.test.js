@@ -22,10 +22,11 @@ const { ScraperService } = await import("./scraper.service.js");
 
 const marketDoc = { _id: "m1", name: "Vero 1", location: [42, 21.4], lastScrapedUpdate: null };
 
-const makeRepos = ({ previousCount }) => ({
+const makeRepos = ({ previousCount, chainMarkets = [marketDoc] }) => ({
   chain: { findByName: vi.fn().mockResolvedValue({ _id: "c1" }), create: vi.fn() },
   market: {
     findByName: vi.fn().mockResolvedValue(marketDoc),
+    findByChain: vi.fn().mockResolvedValue(chainMarkets),
     create: vi.fn(),
     save: vi.fn(),
     findScrapedIds: vi.fn().mockResolvedValue(["m1"]),
@@ -40,6 +41,8 @@ const makeRepos = ({ previousCount }) => ({
     deleteUnseenSince: vi.fn().mockResolvedValue({ deletedCount: 3 }),
     findUnseenProductIds: vi.fn().mockResolvedValue(["gone-1", "gone-2"]),
     backfillLastSeen: vi.fn().mockResolvedValue({ stamped: 0, adminOwned: 0 }),
+    findScrapedProductIdsByMarkets: vi.fn().mockResolvedValue(["closed-1"]),
+    deleteScrapedByMarkets: vi.fn().mockResolvedValue({ deletedCount: 7 }),
   },
   image: { findByTitle: vi.fn().mockResolvedValue({ _id: "img" }) },
   geocoder: { geocode: vi.fn() },
@@ -61,8 +64,8 @@ const makeScraper = (result) => ({
   fetchProducts: vi.fn().mockResolvedValue(result),
 });
 
-const run = async ({ previousCount, result }) => {
-  const repos = makeRepos({ previousCount });
+const run = async ({ previousCount, result, chainMarkets }) => {
+  const repos = makeRepos({ previousCount, chainMarkets });
   const sut = new ScraperService(
     repos.chain,
     repos.market,
@@ -167,5 +170,30 @@ describe("ScraperService stale price cleanup", () => {
     await sut.sweepOrphanProducts();
 
     expect(repos.orphans.sweep).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("stores that leave the chain's list", () => {
+  const unchanged = { upToDate: true };
+
+  it("removes the scraped prices of a store no longer listed", async () => {
+    const closed = { _id: "m2", name: "Vero 2" };
+    const { repos } = await run({ previousCount: 0, result: unchanged, chainMarkets: [marketDoc, closed] });
+
+    expect(repos.marketProduct.deleteScrapedByMarkets).toHaveBeenCalledWith(["m2"]);
+    expect(repos.orphans.removeOrphans).toHaveBeenCalledWith(new Set(["closed-1"]));
+  });
+
+  it("leaves everything alone when the list looks broken", async () => {
+    const others = ["m2", "m3", "m4"].map((id) => ({ _id: id, name: id }));
+    const { repos } = await run({ previousCount: 0, result: unchanged, chainMarkets: [marketDoc, ...others] });
+
+    expect(repos.marketProduct.deleteScrapedByMarkets).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when every known store is listed", async () => {
+    const { repos } = await run({ previousCount: 0, result: unchanged });
+
+    expect(repos.marketProduct.deleteScrapedByMarkets).not.toHaveBeenCalled();
   });
 });

@@ -62,6 +62,7 @@ Each scrape stamps `lastSeenAt` on every MarketProduct row it upserts. After a s
 - Rows an admin created by hand have `lastSeenAt: null` and are never deleted by a scrape.
 - Cleanup is skipped (with a warning) when the scraper reports `complete: false`, or when the store now lists fewer than half as many products as its previous scrape saw. A layout change or broken parser should not wipe a store. The baseline is the previous scrape, not all stored rows, so accumulated stale rows can't block cleanup. The first stamped scrape of a store has no baseline, so only the zero-products and incomplete checks apply to it.
 - Stores whose pricelist is unchanged (`upToDate`) are skipped entirely, so nothing is deleted.
+- A store that drops out of the chain's store list is never scraped again, so after the chain's run its scraper-owned rows are deleted (hand-added prices stay) and the products they leave unpriced go through orphan cleanup. This is skipped with a warning when the list has fewer than half of the chain's known stores, so a broken list page can't wipe the chain. The market itself is kept; delete it in the dashboard if the store closed for good.
 - Rows created before `lastSeenAt` existed are backfilled once per process, before the first scrape: rows in scraped markets are stamped as long unseen unless their product has a description or image (admin-only fields), which are marked admin-owned.
 
 ### Orphaned Products

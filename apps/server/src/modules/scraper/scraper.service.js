@@ -123,6 +123,35 @@ export class ScraperService {
     }
   }
 
+  /**
+   * A store that drops out of the chain's list is never scraped again, so its
+   * prices would stay forever. Remove its scraped prices; hand-added ones stay.
+   */
+  async #removeUnlistedStores(name, chainDoc, listedMarkets, orphanCandidates) {
+    const listed = new Set(listedMarkets.map((m) => m.name));
+    const known = await this.marketRepository.findByChain(chainDoc._id);
+    const unlisted = known.filter((m) => !listed.has(m.name));
+    if (!unlisted.length) return;
+
+    // A broken or partial store list must not wipe the chain.
+    if (listed.size < known.length * MIN_RETAINED_RATIO) {
+      console.warn(
+        `[Scraper] ⚠️  [${name}] Store list has ${listed.size} of ${known.length} known stores; keeping unlisted stores' prices.`,
+      );
+      return;
+    }
+
+    const ids = unlisted.map((m) => m._id);
+    const products = await this.marketProductRepository.findScrapedProductIdsByMarkets(ids);
+    const { deletedCount } = await this.marketProductRepository.deleteScrapedByMarkets(ids);
+    products.forEach((id) => orphanCandidates.add(id));
+    if (deletedCount) {
+      console.log(
+        `[Scraper] 🧹 [${name}] Removed ${deletedCount} prices from stores no longer listed: ${unlisted.map((m) => m.name).join(", ")}.`,
+      );
+    }
+  }
+
   async runForMarket(scraper) {
     const startTime = performance.now();
     await this.backfillLegacyPriceRows();
@@ -195,6 +224,8 @@ export class ScraperService {
           ),
         );
       }
+
+      await this.#removeUnlistedStores(scraper.chainName, chainDoc, markets, orphanCandidates);
     } finally {
       await browser.close();
       await this.#removeOrphanProducts(scraper.chainName, orphanCandidates);
