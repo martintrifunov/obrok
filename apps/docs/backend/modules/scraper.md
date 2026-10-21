@@ -54,6 +54,10 @@ flowchart TD
     I --> J[Close Browser]
 ```
 
+### Saving Prices
+
+A title listed twice in one store's pricelist (repeated pages, duplicate rows) is saved once, with the last price listed.
+
 ### Stale Price Cleanup
 
 Each scrape stamps `lastSeenAt` on every MarketProduct row it upserts. After a store is scraped, that store's stamped rows that weren't seen in this run are deleted, which removes delisted and out-of-stock products.
