@@ -21,11 +21,3 @@ export const updatePublicHolidaySchema = z.object({
   name: z.string().min(1).optional(),
   date: z.coerce.date().optional(),
 });
-
-export const deletePublicHolidaySchema = z.object({
-  id: zodObjectId,
-});
-
-export const publicHolidayParamsSchema = z.object({
-  id: zodObjectId,
-});

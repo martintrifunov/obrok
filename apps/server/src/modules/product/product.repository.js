@@ -8,13 +8,9 @@ const SCRAPER_MADE = {
   image: null,
 };
 
-export class ProductRepository {
-  #populate() {
-    return {
-      image: { path: "image", select: "title url mimeType" },
-    };
-  }
+const IMAGE = { path: "image", select: "title url mimeType" };
 
+export class ProductRepository {
   #buildQuery(filter = {}) {
     const query = {};
     if (filter.title) {
@@ -33,33 +29,20 @@ export class ProductRepository {
   }
 
   async findAll({ page, limit, filter = {} }) {
-    const { image } = this.#populate();
     const query = this.#buildQuery(filter);
-
-    const marketProductsPopulate = { path: "marketProducts", select: "price" };
-
-    if (limit === 0) {
-      const docs = await ProductModel.find(query)
-        .populate(image)
-        .populate(marketProductsPopulate)
-        .exec();
-      return { docs, total: null };
-    }
-
-    const skip = (page - 1) * limit;
     const [docs, total] = await Promise.all([
       ProductModel.find(query)
-        .populate(image)
-        .populate(marketProductsPopulate)
-        .skip(skip)
+        .populate(IMAGE)
+        .populate({ path: "marketProducts", select: "price" })
+        .skip((page - 1) * limit)
         .limit(limit)
         .exec(),
       ProductModel.countDocuments(query).exec(),
     ]);
     return { docs, total };
   }
+
   async findById(id) {
-    const { image } = this.#populate();
     return ProductModel.findById(id)
       .populate({
         path: "marketProducts",
@@ -71,7 +54,7 @@ export class ProductRepository {
           },
         },
       })
-      .populate(image)
+      .populate(IMAGE)
       .exec();
   }
 
@@ -83,8 +66,8 @@ export class ProductRepository {
     return product.save();
   }
 
-  async delete(product, options = {}) {
-    return product.deleteOne(options);
+  async delete(product) {
+    return product.deleteOne();
   }
 
   async bulkUpsertProducts(products) {

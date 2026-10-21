@@ -17,7 +17,6 @@ Image upload, filesystem storage, and metadata management. Shared image library 
 | `image.controller.js` | HTTP handlers |
 | `image.service.js` | Upload orchestration |
 | `image.routes.js` | Route definitions |
-| `image.schema.js` | Zod validation |
 | `image.model.js` | Mongoose schema |
 | `image.repository.js` | Data access |
 | `file.service.js` | Filesystem operations |

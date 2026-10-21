@@ -8,8 +8,8 @@ export class ChainService {
     imageRepository,
     marketRepository,
     marketProductRepository,
-    imageService = null,
-    orphanProductService = null,
+    imageService,
+    orphanProductService,
   ) {
     this.chainRepository = chainRepository;
     this.imageRepository = imageRepository;
@@ -20,13 +20,10 @@ export class ChainService {
   }
 
   async getAllChains({ page, limit, name }) {
-    const filter = {};
-    if (name) filter.name = name;
-
     const { docs, total } = await this.chainRepository.findAll({
       page,
       limit,
-      filter,
+      filter: { name },
     });
     return {
       data: docs,
@@ -75,8 +72,8 @@ export class ChainService {
       await this.marketRepository.delete(market);
     }
     await this.chainRepository.delete(chain);
-    await this.orphanProductService?.removeOrphans(productIds);
-    await this.imageService?.deleteIfUnused(chain.image?._id ?? chain.image);
+    await this.orphanProductService.removeOrphans(productIds);
+    await this.imageService.deleteIfUnused(chain.image?._id ?? chain.image);
   }
 
   async generateReport() {
@@ -84,11 +81,9 @@ export class ChainService {
 
     const rows = marketsData.map(
       ({ name, location, chain, marketProducts }) => {
-        const productsData = marketProducts?.length
-          ? marketProducts
-              .map((mp) => `${mp.product.title}, ${mp.price} ден`)
-              .join("\n")
-          : "";
+        const productsData = (marketProducts ?? [])
+          .map((mp) => `${mp.product.title}, ${mp.price} ден`)
+          .join("\n");
         return {
           market: name,
           chain: chain?.name || "",

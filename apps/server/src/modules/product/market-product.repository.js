@@ -66,11 +66,6 @@ export class MarketProductRepository {
       { $unwind: { path: "$product.image", preserveNullAndEmptyArrays: true } },
     );
 
-    if (limit === 0) {
-      const docs = await MarketProductModel.aggregate(pipeline);
-      return { docs, total: null };
-    }
-
     const countPipeline = [...pipeline, { $count: "total" }];
     const [countResult] = await MarketProductModel.aggregate(countPipeline);
     const total = countResult?.total || 0;
@@ -101,18 +96,6 @@ export class MarketProductRepository {
     ];
     const results = await MarketProductModel.aggregate(pipeline);
     return results.map((r) => r._id);
-  }
-
-  async findByProduct(productId) {
-    return MarketProductModel.find({ product: productId })
-      .populate({
-        path: "market",
-        populate: {
-          path: "chain",
-          populate: { path: "image", select: "title url mimeType" },
-        },
-      })
-      .exec();
   }
 
   /**
@@ -260,11 +243,11 @@ export class MarketProductRepository {
     }).exec();
   }
 
-  async deleteByMarket(marketId, options = {}) {
-    return MarketProductModel.deleteMany({ market: marketId }, options).exec();
+  async deleteByMarket(marketId) {
+    return MarketProductModel.deleteMany({ market: marketId }).exec();
   }
 
-  async deleteByProduct(productId, options = {}) {
-    return MarketProductModel.deleteMany({ product: productId }, options).exec();
+  async deleteByProduct(productId) {
+    return MarketProductModel.deleteMany({ product: productId }).exec();
   }
 }

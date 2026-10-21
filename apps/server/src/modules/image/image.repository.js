@@ -20,10 +20,6 @@ export class ImageRepository {
     return ImageModel.findById(id).exec();
   }
 
-  async findByFilename(filename) {
-    return ImageModel.findOne({ filename }).exec();
-  }
-
   async findByTitle(title) {
     return ImageModel.findOne({ title }).exec();
   }

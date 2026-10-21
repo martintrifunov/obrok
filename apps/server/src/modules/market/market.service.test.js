@@ -35,14 +35,4 @@ describe("MarketService.deleteMarket", () => {
     expect(orphanProductService.removeOrphans).toHaveBeenCalledWith(["p1", "p2"]);
     expect(order).toEqual(["rows", "market", "orphans"]);
   });
-
-  it("still deletes when no orphan service is wired", async () => {
-    marketRepository.findById.mockResolvedValue({ _id: "m1" });
-    marketProductRepository.findProductIdsByMarket.mockResolvedValue([]);
-    const sut = new MarketService(marketRepository, {}, marketProductRepository);
-
-    await sut.deleteMarket("m1");
-
-    expect(marketRepository.delete).toHaveBeenCalled();
-  });
 });

@@ -6,3 +6,6 @@ export const zodObjectId = z
   .refine((val) => /^[a-f\d]{24}$/i.test(val), {
     message: "Invalid ID format.",
   });
+
+/** Body or params that only carry a document id (delete, get by id). */
+export const idSchema = z.object({ id: zodObjectId });

@@ -3,12 +3,11 @@ import { publicHolidayController } from "../../container.js";
 import verifyJWT from "../auth/middleware/verifyJWT.js";
 import verifyAdmin from "../auth/middleware/verifyAdmin.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
+import { idSchema } from "../../shared/schemas/zodObjectId.js";
 import {
   publicHolidayQuerySchema,
   createPublicHolidaySchema,
   updatePublicHolidaySchema,
-  deletePublicHolidaySchema,
-  publicHolidayParamsSchema,
 } from "./public-holiday.schema.js";
 
 const router = Router();
@@ -20,7 +19,7 @@ router.get(
 );
 router.get(
   "/:id",
-  validateRequest(publicHolidayParamsSchema, "params"),
+  validateRequest(idSchema, "params"),
   publicHolidayController.getById,
 );
 router.post(
@@ -41,7 +40,7 @@ router.delete(
   "/",
   verifyJWT,
   verifyAdmin,
-  validateRequest(deletePublicHolidaySchema),
+  validateRequest(idSchema),
   publicHolidayController.delete,
 );
 

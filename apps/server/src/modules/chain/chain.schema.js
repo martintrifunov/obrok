@@ -19,11 +19,3 @@ export const updateChainSchema = z.object({
   name: z.string().min(1).optional(),
   image: zodObjectId.optional(),
 });
-
-export const deleteChainSchema = z.object({
-  id: zodObjectId,
-});
-
-export const chainParamsSchema = z.object({
-  id: zodObjectId,
-});
