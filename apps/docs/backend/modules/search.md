@@ -74,8 +74,9 @@ flowchart TD
 Each ingredient is priced per market by `SmartSearchService.findIngredient`:
 
 1. **Candidates** (`SearchService.findIngredientCandidates`): priced products whose vector similarity to the ingredient is within 0.025 of the best match. Keyword matches alone never qualify: measured on the catalogue, the misleading ones ("ПАСТА ЗА ЗАБИ" for "паста", "СОС ... СО СИРЕЊЕ" for "сирење", "БЕЗ ШЕЌЕР" for "шеќер") sit 0.03 to 0.08 below the best match.
-2. **Per market**: among the candidates that market sells, only those within 0.01 of its own best one compete, and the cheapest of those is used. This keeps a cheaper near-miss (instant noodles for pasta, a vegan spread for cheese) from winning on price.
-3. **Fallback**: without the vector index, the hybrid results are filtered to titles that name the ingredient as a word (`pickIngredientCandidates`) and the cheapest is used.
+2. **Per market**: among the candidates that market sells, only those within 0.01 of its own best one compete. This keeps a cheaper near-miss (instant noodles for pasta, a vegan spread for cheese) from winning on price.
+3. **Pack size**: the quantity is read from each title ("500ГР", "0,75Л", "6Х0.5Л", or "КГ" for a price per kilogram) by `shared/utils/packSize.js`. The usual pack of the ingredient is the median size across all candidates, in their most common unit. Among a store's competing products, the cheapest per kilogram or litre wins, counting only packs between half and double the usual size; a price per kilogram counts as a 1 kg pack. This keeps 10×10 g coffee creamer portions from pricing milk, and a 1 kg block from pricing a 400 g cheese. When fewer than three candidates or under a third of them carry a size (eggs, cheese sold loose), or no competing product has a comparable size, the cheapest package is used instead. The basket always counts the package price.
+4. **Fallback**: without the vector index, the hybrid results are filtered to titles that name the ingredient as a word (`pickIngredientCandidates`) and the cheapest is used.
 
 Results show at most three stores per chain (stores of one chain usually share a pricelist) and 20 stores in total.
 
@@ -117,7 +118,7 @@ Query embeddings are cached in memory (2000 entries, least recently used evicted
 
 ### Evaluation
 
-`npm run eval:search` scores product search, meal ingredient picks and meal decomposition against the live catalogue, using the cases in `src/scripts/search-eval/cases.js`, and reports latency and AI call counts. Run it inside the API container (`docker exec obrok_api npm run eval:search`) before and after any search change. Flags: `--no-meals` skips the AI decomposition cases, `--no-meal-cache` bypasses saved meals, `--json=<file>` saves the results.
+`npm run eval:search` scores product search, meal ingredient picks and meal decomposition against the live catalogue, using the cases in `src/scripts/search-eval/cases.js`, and reports latency and AI call counts. Ingredient rows also show the usual pack size and how many picked titles have a readable size. Run it inside the API container (`docker exec obrok_api npm run eval:search`) before and after any search change. Flags: `--no-meals` skips the AI decomposition cases, `--no-meal-cache` bypasses saved meals, `--json=<file>` saves the results.
 
 ### Feature Flag Gates
 

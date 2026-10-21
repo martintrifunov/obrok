@@ -1,6 +1,7 @@
 import { haversineDistance } from "../../shared/utils/haversine.js";
 import { calculateWeeklyBudget } from "../../shared/utils/obrokBudget.js";
 import { buildWordStartMatcher } from "../../shared/utils/bilingualRegex.js";
+import { parsePackSize } from "../../shared/utils/packSize.js";
 import {
   todayInAppTimeZone,
   utcDateToLocalCalendarDate,
@@ -14,6 +15,54 @@ const MAX_MARKETS = 20;
 // Within one store, only products this close to its best match for the
 // ingredient compete on price, so a cheaper near-miss can't win.
 const MARKET_BAND = 0.01;
+// Packs under half or over double the usual size for an ingredient (portion
+// packs, bulk sizes) don't compete on price per kilogram or litre.
+const PACK_RANGE = [0.5, 2];
+
+/**
+ * The typical pack of an ingredient across all stores: the median size in its
+ * most common unit. Null when too few titles carry a size (eggs, or a few egg
+ * dyes among them), in which case package prices are compared as before.
+ * @param {{ product?: { title?: string } }[]} candidates
+ * @returns {{ amount: number, unit: "g" | "ml" } | null}
+ */
+export const usualPackSize = (candidates) => {
+  const sizes = candidates.map((c) => parsePackSize(c.product?.title || "")).filter(Boolean);
+  const packs = sizes.filter((size) => !size.byWeight);
+  if (packs.length < 3 || sizes.length * 3 < candidates.length) return null;
+
+  const grams = packs.filter((size) => size.unit === "g");
+  const unit = grams.length * 2 >= packs.length ? "g" : "ml";
+  const amounts = packs.filter((size) => size.unit === unit).map((size) => size.amount).sort((a, b) => a - b);
+  return { amount: amounts[Math.floor(amounts.length / 2)], unit };
+};
+
+/**
+ * Cheapest per kilogram or litre among packs near the usual size; package price
+ * when no option has a comparable size. A price per kilogram counts as a 1 kg pack.
+ * @template {{ price: number, product?: { title?: string } }} T
+ * @param {T[]} options
+ * @param {{ amount: number, unit: string } | null} usual
+ * @returns {T}
+ */
+export const cheapestSensiblePack = (options, usual) => {
+  const cheapest = (list, key) => list.reduce((a, b) => (key(b) < key(a) ? b : a));
+  if (!usual) return cheapest(options, (o) => o.price);
+
+  const [low, high] = PACK_RANGE.map((f) => f * usual.amount);
+  const sized = [];
+  const unknown = [];
+  for (const option of options) {
+    const size = parsePackSize(option.product?.title || "");
+    if (!size) unknown.push(option);
+    else if (size.unit === usual.unit && size.amount >= low && size.amount <= high) {
+      sized.push({ option, perUnit: option.price / size.amount });
+    }
+  }
+  if (sized.length) return cheapest(sized, (s) => s.perUnit).option;
+  if (unknown.length) return cheapest(unknown, (o) => o.price);
+  return cheapest(options, (o) => o.price);
+};
 // Stores of one chain usually share a pricelist; show a few, not twenty.
 const MAX_MARKETS_PER_CHAIN = 3;
 
@@ -211,7 +260,7 @@ export class SmartSearchService {
 
   /**
    * @param {string} name
-   * @returns {Promise<{ name: string, strict: boolean, offers: Map<string, { market: any, product: any, price: number }> }>}
+   * @returns {Promise<{ name: string, strict: boolean, usual: { amount: number, unit: string } | null, offers: Map<string, { market: any, product: any, price: number }> }>}
    */
   async findIngredient(name) {
     const { results, strict, scored } = await this.#ingredientCandidates(name);
@@ -232,18 +281,19 @@ export class SmartSearchService {
       }
     }
 
+    const usual = scored ? usualPackSize(results) : null;
     const offers = new Map();
     for (const [mid, options] of byMarket) {
-      offers.set(mid, this.#pickOffer(options, { strict, scored }));
+      offers.set(mid, this.#pickOffer(options, { strict, scored, usual }));
     }
-    return { name, strict, offers };
+    return { name, strict, usual, offers };
   }
 
   /**
    * @param {{ market: any, product: any, price: number, score: number }[]} options in rank order
-   * @param {{ strict: boolean, scored: boolean }} mode
+   * @param {{ strict: boolean, scored: boolean, usual: { amount: number, unit: string } | null }} mode
    */
-  #pickOffer(options, { strict, scored }) {
+  #pickOffer(options, { strict, scored, usual }) {
     // Fallback results (no real match): keep the best-ranked, not the cheapest.
     if (!strict) return options[0];
     let eligible = options;
@@ -251,7 +301,7 @@ export class SmartSearchService {
       const best = Math.max(...options.map((o) => o.score));
       eligible = options.filter((o) => o.score >= best - MARKET_BAND);
     }
-    const { market, product, price } = eligible.reduce((a, b) => (b.price < a.price ? b : a));
+    const { market, product, price } = cheapestSensiblePack(eligible, usual);
     return { market, product, price };
   }
 

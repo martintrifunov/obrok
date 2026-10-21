@@ -41,7 +41,7 @@ flowchart TD
     E --> F[Shopping list + ranked markets returned]
 ```
 
-Each ingredient is matched by meaning, not by the word alone: "паста" in a meal should be priced with pasta, not "ПАСТА ЗА ЗАБИ" (toothpaste), even though the toothpaste title contains the word. Only products very close to the best match count, and in each store the cheapest of its closest matches is used. Results show at most three stores per chain, since stores of one chain usually share a pricelist.
+Each ingredient is matched by meaning, not by the word alone: "паста" in a meal should be priced with pasta, not "ПАСТА ЗА ЗАБИ" (toothpaste), even though the toothpaste title contains the word. Only products very close to the best match count. In each store, the closest matches are compared per kilogram or litre among normal pack sizes for that ingredient (read from the title), so milk is priced with a 1 L carton rather than cheaper coffee creamer portions, and cheese with a usual pack rather than a 1 kg block. Where titles carry no size, as with eggs, the cheapest package is used. Results show at most three stores per chain, since stores of one chain usually share a pricelist.
 
 The ingredient list itself is whatever the language model returns, there is no structured recipe database behind it. This is a deliberate trade-off: it works for arbitrary dishes without needing anyone to curate a recipe corpus, at the cost of decomposition quality being only as good as the model's output for that particular dish and phrasing.
 

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SmartSearchService, pickIngredientCandidates, limitPerChain } from "./smart-search.service.js";
+import {
+  SmartSearchService,
+  pickIngredientCandidates,
+  limitPerChain,
+  usualPackSize,
+  cheapestSensiblePack,
+} from "./smart-search.service.js";
 
 const market = { _id: "m1", name: "Vero", location: [42.0, 21.4] };
 
@@ -186,5 +192,71 @@ describe("limitPerChain", () => {
     ];
 
     expect(limitPerChain(markets).map((m) => m.market._id)).toEqual(["v1", "v2", "k1", "v3", "k2"]);
+  });
+});
+
+describe("pack sizes", () => {
+  const option = (title, price) => ({ product: { title }, price });
+
+  it("finds the usual pack in the most common unit", () => {
+    const usual = usualPackSize(
+      ["МЛЕКО 1Л", "МЛЕКО 1 Л", "МЛЕКО 0.5Л", "МЛЕКО ЗА КАФЕ 10х10гр.", "МЛЕКО 1L", "МЛЕКО РЕФУС КГ"].map((title) => ({
+        product: { title },
+      })),
+    );
+
+    expect(usual).toEqual({ amount: 1000, unit: "ml" });
+  });
+
+  it("has no usual pack when few titles carry a size", () => {
+    expect(usualPackSize([{ product: { title: "КОМПИР КГ" } }, { product: { title: "КОМПИР МЛАД" } }])).toBeNull();
+  });
+
+  it("ignores the few sized odd ones among unsized products", () => {
+    const titles = ["БОЈА ЗА ЈАЈЦА 6 ГР", "БОЈА ЗА ЈАЈЦА 5 ГР", "ЧОКОЛАДНИ ЈАЈЦА 120 ГР"];
+    for (let i = 0; i < 10; i++) titles.push(`ЈАЈЦА М 10/1 ФАРМА ${i}`);
+
+    expect(usualPackSize(titles.map((title) => ({ product: { title } })))).toBeNull();
+  });
+
+  it("prices loose produce per kilogram against bagged packs", () => {
+    const picked = cheapestSensiblePack(
+      [option("КОМПИР МРЕЖА 2КГ", 90), option("КОМПИР 1КГ ПАКУВАН", 50), option("КОМПИР МЛАД КГ", 40)],
+      { amount: 1000, unit: "g" },
+    );
+
+    expect(picked.product.title).toBe("КОМПИР МЛАД КГ");
+  });
+
+  it("prices milk with a carton, not cheaper coffee creamer portions", () => {
+    const picked = cheapestSensiblePack(
+      [option("МЛЕКО СВЕЖО 3.2% 1 Л", 71), option("МЛЕКО ЗА КАФЕ 10% 10х10гр.", 45), option("МЛЕКО 0.5Л", 40)],
+      { amount: 1000, unit: "ml" },
+    );
+
+    expect(picked.product.title).toBe("МЛЕКО СВЕЖО 3.2% 1 Л");
+  });
+
+  it("compares normal packs per kilogram, skipping bulk and tiny ones", () => {
+    const picked = cheapestSensiblePack(
+      [
+        option("КАШКАВАЛ ДИМЕН 300ГР", 169),
+        option("КАШКАВАЛ ОВЧИ МЛАД 350гр.", 219),
+        option("КАШКАВАЛ ТОСТ 100ГР", 77),
+        option("КАШКАВАЛ КРАВЈИ кгр МИЛКАНО", 419),
+      ],
+      { amount: 400, unit: "g" },
+    );
+
+    expect(picked.product.title).toBe("КАШКАВАЛ ДИМЕН 300ГР");
+  });
+
+  it("falls back to package price when no option has a comparable size", () => {
+    const picked = cheapestSensiblePack(
+      [option("ЈАЈЦА 10/1", 99), option("ЈАЈЦА ОД", 92)],
+      { amount: 400, unit: "g" },
+    );
+
+    expect(picked.product.title).toBe("ЈАЈЦА ОД");
   });
 });
