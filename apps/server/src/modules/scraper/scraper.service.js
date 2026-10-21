@@ -296,8 +296,6 @@ export class ScraperService {
       await this.#optimizePage(page);
 
       let result;
-      let lastError;
-
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           result = await scraper.fetchProducts(
@@ -305,10 +303,8 @@ export class ScraperService {
             pricelistUrl,
             marketDoc.lastScrapedUpdate,
           );
-          lastError = null;
           break;
         } catch (err) {
-          lastError = err;
           if (attempt === 2 || !isTransientScrapeError(err)) {
             throw err;
           }
@@ -323,10 +319,6 @@ export class ScraperService {
         }
       }
 
-      if (lastError) {
-        throw lastError;
-      }
-
       if (result.upToDate) {
         const tabDuration = ((performance.now() - tabStartTime) / 1000).toFixed(
           2,
@@ -337,20 +329,16 @@ export class ScraperService {
         return;
       }
 
-      const rawProducts = result.products;
-      if (!rawProducts || !rawProducts.length) {
+      if (!result.products?.length) {
         console.warn(`[Scraper] ⚠️  [${name}] Returned 0 products.`);
         return;
       }
 
-      const productsData = rawProducts.map(({ title, category }) => ({
-        title,
-        category,
-      }));
+      // A title listed twice (e.g. on repeated pages) keeps its last price.
+      const products = [...new Map(result.products.map((p) => [p.title, p])).values()];
+      const productIdMap = await this.#safeProductUpsert(products);
 
-      const productIdMap = await this.#safeProductUpsert(productsData);
-
-      const marketProducts = rawProducts
+      const marketProducts = products
         .filter(({ title }) => productIdMap.has(title))
         .map(({ title, price }) => ({
           market: marketDoc._id,
@@ -382,7 +370,7 @@ export class ScraperService {
         2,
       );
       console.log(
-        `[Scraper] ✅ [${name}] Scraped ${rawProducts.length} items in ${tabDuration}s`,
+        `[Scraper] ✅ [${name}] Scraped ${products.length} items in ${tabDuration}s`,
       );
     } catch (err) {
       console.error(`[ScraperService] Error in [${name}]:`, err.message);

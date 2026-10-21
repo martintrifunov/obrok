@@ -16,10 +16,6 @@ export class SuperKitGoScraper extends BaseScraper {
     return "superkitgo";
   }
 
-  get geocodeSuffix() {
-    return "Македонија";
-  }
-
   /**
    * Override base parser to also handle YYYY-MM-DD HH:mm:ss format
    * returned by the Super Kit-Go JSON API.
@@ -152,12 +148,6 @@ export class SuperKitGoScraper extends BaseScraper {
       allProducts.push(...this.#extractProducts(pageData.products));
     }
 
-    // Deduplicate by title, keeping latest occurrence
-    const latestByTitle = new Map();
-    for (const product of allProducts) {
-      latestByTitle.set(product.title, product);
-    }
-
     if (!complete) {
       console.warn(
         `[SuperKitGoScraper] Incomplete scrape of ${storeUrl}; not saving the update date so the next run retries.`,
@@ -166,7 +156,7 @@ export class SuperKitGoScraper extends BaseScraper {
 
     return {
       upToDate: false,
-      products: Array.from(latestByTitle.values()),
+      products: allProducts,
       // Saving the date after a partial scrape would mark the store up to date
       // and skip the missing pages until the chain publishes a new pricelist.
       newUpdateDate: complete ? newUpdateDate : undefined,

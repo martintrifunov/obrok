@@ -4,21 +4,16 @@ import { StokomakScraper } from "./markets/stokomak.scraper.js";
 import { KamScraper } from "./markets/kam.scraper.js";
 import { SuperKitGoScraper } from "./markets/superkitgo.scraper.js";
 
-const SCRAPER_REGISTRY = {
-  vero: { create: () => new VeroScraper() },
-  ramstore: { create: () => new RamstoreScraper() },
-  stokomak: { create: () => new StokomakScraper() },
-  kam: { create: () => new KamScraper() },
-  superkitgo: { create: () => new SuperKitGoScraper() },
+const SCRAPERS = {
+  vero: VeroScraper,
+  ramstore: RamstoreScraper,
+  stokomak: StokomakScraper,
+  kam: KamScraper,
+  superkitgo: SuperKitGoScraper,
 };
 
-export const SCRAPER_KEYS = Object.keys(SCRAPER_REGISTRY);
+export const SCRAPER_KEYS = Object.keys(SCRAPERS);
 
-export const createScraper = (key) => {
-  if (!key) return null;
-  const entry = SCRAPER_REGISTRY[key.toLowerCase()];
-  return entry ? entry.create() : null;
-};
+export const createScraper = (key) => (SCRAPERS[key] ? new SCRAPERS[key]() : null);
 
-export const createAllScrapers = () =>
-  SCRAPER_KEYS.map((key) => SCRAPER_REGISTRY[key].create());
+export const createAllScrapers = () => SCRAPER_KEYS.map(createScraper);

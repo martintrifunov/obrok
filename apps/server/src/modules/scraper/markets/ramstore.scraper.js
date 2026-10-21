@@ -25,10 +25,6 @@ export class RamstoreScraper extends BaseScraper {
     return "ramstore";
   }
 
-  get geocodeSuffix() {
-    return "Македонија";
-  }
-
   /**
    * @param {import('puppeteer').Page} page
    * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}
@@ -213,16 +209,9 @@ export class RamstoreScraper extends BaseScraper {
     });
 
     if (fastPath.supported) {
-      // Keep the latest seen price per title to avoid unnecessary duplicate writes.
-      const latestByTitle = new Map();
-      for (const p of withParsedPrices(fastPath.products)) {
-        latestByTitle.set(p.title, p);
-      }
-      allProducts.push(...latestByTitle.values());
-
       return {
         upToDate: false,
-        products: allProducts,
+        products: withParsedPrices(fastPath.products),
         newUpdateDate: pageUpdateDate,
       };
     }
@@ -289,16 +278,9 @@ export class RamstoreScraper extends BaseScraper {
       }
     }
 
-    // Fallback path can also produce duplicate titles from repeated pages.
-    // Keep latest seen price per title before persisting.
-    const latestByTitle = new Map();
-    for (const p of allProducts) {
-      latestByTitle.set(p.title, p);
-    }
-
     return {
       upToDate: false,
-      products: Array.from(latestByTitle.values()),
+      products: allProducts,
       newUpdateDate: pageUpdateDate,
     };
   }

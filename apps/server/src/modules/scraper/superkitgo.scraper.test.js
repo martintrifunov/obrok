@@ -171,24 +171,6 @@ describe("SuperKitGoScraper", () => {
       expect(result.upToDate).toBe(true);
     });
 
-    it("deduplicates products by title keeping latest", async () => {
-      const apiData = makeApiResponse([
-        makeProduct({ product_name: "DUPE", dostapnost: "1", prodazna_cena: "100.00" }),
-        makeProduct({ product_name: "DUPE", dostapnost: "1", prodazna_cena: "120.00" }),
-        makeProduct({ product_name: "UNIQUE", dostapnost: "1", prodazna_cena: "50.00" }),
-      ]);
-
-      vi.spyOn(globalThis, "fetch").mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(apiData),
-      });
-
-      const result = await scraper.fetchProducts(null, "https://www.superkitgo.mk/table.php?market=market11", null);
-      expect(result.products).toHaveLength(2);
-      const dupe = result.products.find((p) => p.title === "DUPE");
-      expect(dupe.price).toBe(120); // Latest wins
-    });
-
     it("handles failed API response gracefully", async () => {
       vi.spyOn(globalThis, "fetch").mockResolvedValue({
         ok: true,

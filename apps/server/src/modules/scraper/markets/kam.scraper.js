@@ -20,10 +20,6 @@ export class KamScraper extends BaseScraper {
     return "kam";
   }
 
-  get geocodeSuffix() {
-    return "Македонија";
-  }
-
   /**
    * @param {import('puppeteer').Page} page
    * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}

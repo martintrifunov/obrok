@@ -124,6 +124,27 @@ describe("ScraperService stale price cleanup", () => {
     expect(repos.marketProduct.deleteUnseenSince).toHaveBeenCalled();
   });
 
+  it("saves one price per title, the last one listed", async () => {
+    const { repos } = await run({
+      previousCount: 0,
+      result: {
+        upToDate: false,
+        products: [
+          { title: "DUPE", price: 100, category: "Општо" },
+          { title: "UNIQUE", price: 50, category: "Општо" },
+          { title: "DUPE", price: 120, category: "Општо" },
+        ],
+        newUpdateDate: new Date(),
+      },
+    });
+
+    const [rows] = repos.marketProduct.bulkUpsert.mock.calls[0];
+    expect(rows).toEqual([
+      { market: "m1", product: "p-DUPE", price: 120 },
+      { market: "m1", product: "p-UNIQUE", price: 50 },
+    ]);
+  });
+
   it("does nothing when the pricelist is unchanged", async () => {
     const { repos } = await run({ previousCount: 10, result: { upToDate: true } });
 
