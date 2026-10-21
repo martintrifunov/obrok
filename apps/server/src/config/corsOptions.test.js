@@ -15,7 +15,8 @@ describe("corsOptions.origin", () => {
     expect(decide(undefined)).toEqual([null, true]);
   });
 
-  it("refuses other origins without raising an error", () => {
-    expect(decide("http://evil.example")).toEqual([null, false]);
+  it("refuses other origins with a 403 before any route runs", () => {
+    const [err] = decide("http://evil.example");
+    expect(err).toMatchObject({ statusCode: 403, message: "Origin not allowed." });
   });
 });

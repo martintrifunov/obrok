@@ -30,7 +30,7 @@ sequenceDiagram
 ### Security Controls
 
 - Helmet enabled with production CSP behavior.
-- Allowed origins enforced by CORS options.
+- Allowed origins enforced by CORS options: only `CLIENT_ORIGIN` and requests without an `Origin` header pass; any other origin gets a 403 before a route runs, so a foreign page can't trigger cookie-authenticated routes such as refresh or logout.
 - JWT verification middleware protects private routes.
 - Error middleware converts internal failures to structured responses.
 

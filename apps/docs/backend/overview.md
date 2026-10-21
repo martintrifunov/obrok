@@ -18,10 +18,12 @@ The backend is an Express service organized by modules and built with layered ar
 4. Start scheduled jobs (scraper and analytics).
 5. Start HTTP server.
 
+A failed startup step or an unhandled promise rejection ends the process with exit code 1, and Docker's `restart` policy starts it again rather than leaving it running in an unknown state.
+
 ### Middleware Stack (Order Matters)
 
 1. Helmet security headers.
-2. CORS (with credentials enabled).
+2. CORS (with credentials enabled). Requests from any other origin get a 403 before any route runs.
 3. Body parsers and cookie parser.
 4. Visitor tracking.
 5. Route mounting.
