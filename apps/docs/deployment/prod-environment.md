@@ -77,10 +77,9 @@ From the repository checkout on the VPS:
 
 1. Refuses to run without a real `CERTBOT_EMAIL` or without `data/map/*.osrm*` files.
 2. If `data/certbot/conf` exists, asks for confirmation and moves it to `data/certbot/conf.bak-<timestamp>`. On any later error it restores the backup and restarts Nginx.
-3. Downloads Certbot's `options-ssl-nginx.conf` and `ssl-dhparams.pem` into `data/certbot/conf` (the current `nginx.conf` sets protocols and ciphers itself and does not include them).
-4. Creates a one-day self-signed certificate under `live/obrok.net` and starts Nginx (`up --build --force-recreate -d nginx`, which also starts `api`, `osrm` and `db`).
-5. Deletes the dummy certificate and requests a real one with `certbot certonly --webroot` for both domains under the certificate name `obrok.net`.
-6. Reloads Nginx, deletes the backup, and runs `docker compose -f docker-compose.prod.yml up -d`.
+3. Creates a one-day self-signed certificate under `live/obrok.net` and starts Nginx (`up --build --force-recreate -d nginx`, which also starts `api`, `osrm` and `db`).
+4. Deletes the dummy certificate and requests a real one with `certbot certonly --webroot` for both domains under the certificate name `obrok.net`.
+5. Reloads Nginx, deletes the backup, and runs `docker compose -f docker-compose.prod.yml up -d`.
 
 After that, `certbot` renews and `nginx` reloads on their 12-hour loops; no cron is needed.
 
