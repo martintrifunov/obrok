@@ -12,10 +12,6 @@ const PORT = process.env.PORT || 5000;
 // Docker sends SIGKILL 10s after SIGTERM; finish before that.
 const SHUTDOWN_TIMEOUT_MS = 8000;
 
-process.on("unhandledRejection", (reason) => {
-  console.error("Unhandled Rejection:", reason);
-});
-
 const registerShutdown = (server, cronTasks) => {
   let shuttingDown = false;
 
