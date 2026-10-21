@@ -147,7 +147,5 @@ export {
   embeddingService,
   productEmbeddingRepository,
   vectorIndex,
-  productRepository,
-  marketProductRepository,
   analyticsService,
 };

@@ -15,9 +15,6 @@ export const createRateLimiter = ({ windowMs, max, message }) => {
     message: { message },
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res, next, options) => {
-      res.status(options.statusCode).json(options.message);
-    },
   });
 };
 

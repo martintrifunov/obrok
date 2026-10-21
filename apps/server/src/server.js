@@ -1,9 +1,9 @@
 import "dotenv/config";
 import app from "./app.js";
-import connectDB from "./infrastructure/database/connectDB.js";
 import mongoose from "mongoose";
 import { startScraperCron } from "./modules/scraper/scraper.cron.js";
 import { startAnalyticsCron } from "./modules/analytics/analytics.cron.js";
+import { seedAdminUser } from "./infrastructure/database/seed.js";
 import { seedChainImages } from "./infrastructure/database/seed-chain-images.js";
 import { seedFeatureFlags } from "./infrastructure/database/seed-feature-flags.js";
 import { scraperService, analyticsService, embeddingService, productEmbeddingRepository, vectorIndex, featureFlagService, reportService } from "./container.js";
@@ -48,9 +48,10 @@ const prepareVectorIndex = async () => {
 };
 
 const start = async () => {
-  await connectDB();
+  await mongoose.connect(process.env.DATABASE_URI);
   console.log("Connected to MongoDB");
 
+  await seedAdminUser();
   await seedChainImages();
   await seedFeatureFlags();
 

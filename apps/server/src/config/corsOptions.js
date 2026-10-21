@@ -1,10 +1,8 @@
-import allowedOrigins from "./allowedOrigins.js";
-
 const corsOptions = {
   origin: (origin, callback) => {
     // !origin allows same-origin requests (no Origin header) and non-browser clients;
     // authentication (JWT) is the real access control, not CORS.
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+    if (!origin || origin === process.env.CLIENT_ORIGIN) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
