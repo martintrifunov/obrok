@@ -8,7 +8,7 @@ export const searchCases = [
   { q: "млеко", expect: /МЛЕКО/i, forbid: /ДЕТСКА ХРАНА|ЧОКОЛ|КАФЕ/i },
   { q: "kaskaval", expect: /КАШКАВАЛ|KAŠKAVAL|KASKAVAL/i },
   { q: "najeftin kaskaval", expect: /КАШКАВАЛ/i, priceSort: "asc" },
-  { q: "najeftino mleko", expect: /МЛЕКО/i, priceSort: "asc" },
+  { q: "najeftino mleko", expect: /МЛЕКО/i, forbid: /ЧОК|\^OK|ШЕЈК|ЗА КАФЕ|ЗА ТЕЛО/i, priceSort: "asc" },
   { q: "најскапо вино", expect: /ВИНО|0[.,]75|КАРМЕНЕР|СИРАХ|МЕРЛО|ВРАНЕЦ|ШАРДОНЕ|РОЗЕ|КАБЕРНЕ/i, priceSort: "desc" },
   { q: "леб", expect: /(^|\s)ЛЕБ/i, forbid: /ЛЕБЛЕБ|ТРОШКИ|ПРЕЗЛ/i },
   { q: "јајца", expect: /ЈАЈЦ|JAJC/i, forbid: /ТЕСТЕНИН|МАЈОНЕЗ|КИНДЕР|ЧОКОЛ/i },
