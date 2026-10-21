@@ -38,7 +38,7 @@ Both files use one bridge network (`obrok_net` in dev, `obrok_prod_net` in prod)
 Both environments read the same two files, documented in [ENV_TEMPLATES.md](https://github.com/martintrifunov/obrok/blob/main/ENV_TEMPLATES.md):
 
 - Root `.env`: loaded into the API with `env_file`, and used by Compose to substitute `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD` for the `db` service.
-- `apps/client/.env`: `VITE_*` variables read by Vite. In production they are baked into the bundle when the Nginx image is built, so changing them needs a rebuild.
+- `apps/client/.env`: `VITE_*` variables read by Vite in development. Production doesn't use it: the release workflow bakes the production values into the web image (see [Release Pipeline](/deployment/prod-environment#release-pipeline)). The root `.env` in production also holds `OBROK_TAG`, the release whose images run.
 
 ### GitHub Actions Workflows
 

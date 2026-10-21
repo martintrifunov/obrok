@@ -25,6 +25,9 @@ CLIENT_ORIGIN="https://obrok.net"
 SERVER_ORIGIN="https://obrok.net"
 PORT=5000
 
+# --- Production only: the release whose images run (set by each deploy; edit to roll back) ---
+OBROK_TAG="v2026.03.13.1"
+
 # --- Web Scraper (optional, all have defaults) ---
 SCRAPER_CONCURRENT_TABS=2
 SCRAPER_NAV_TIMEOUT_MS=90000
@@ -51,12 +54,14 @@ GEMINI_API_KEY="your_gemini_api_key"
 ## 2. Client Directory (`/apps/client/.env`)
 Create a `.env` file inside the `apps/client` folder. These must start with `VITE_` to be exposed to the React frontend.
 
+Only needed for development: production images are built in GitHub Actions with these production values (`docker-compose.prod.yml` build args).
+
 ```env
 # For local dev, use http://localhost:5000. For prod, use your domain.
 VITE_API_URL="https://obrok.net"
 VITE_OSRM_URL="https://obrok.net/route/v1"
 VITE_DEFAULT_VISIBLE_CHAINS="Vero,Ramstore"
 
-# Automatically injected by GitHub Actions during production deployment
+# Set from the release tag when the production image is built
 VITE_RELEASE_VERSION="v2026.03.13.1"
 ```

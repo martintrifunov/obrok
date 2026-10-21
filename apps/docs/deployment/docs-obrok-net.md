@@ -23,10 +23,8 @@ Site configuration (navigation, sidebar, local search, Mermaid via `vitepress-pl
 ### How It Ships
 
 1. On a pull request that touches `apps/docs/**`, `.github/workflows/docs-ci.yml` runs `npm ci` and `npm run docs:build` on Node 24. A broken build fails the check.
-2. On a published release, `.github/workflows/deploy.yml` runs on the VPS: `npm ci`, `rm -rf .vitepress/cache`, `npm run docs:build` in `apps/docs`, then `docker restart obrok_nginx` after the containers are rebuilt.
-3. `docker-compose.prod.yml` mounts `./apps/docs/.vitepress/dist` read-only at `/var/www/docs` in `obrok_nginx`.
-
-There is no separate artifact upload: the build output exists only on the VPS.
+2. On a published release, the `build` job of `.github/workflows/deploy.yml` runs `npm ci` and `npm run docs:build` with full git history, and `apps/nginx/Dockerfile` copies `.vitepress/dist` into the web image at `/var/www/docs`.
+3. The VPS pulls that image; the docs ship and roll back together with the client.
 
 ### Nginx Server Block
 
@@ -76,5 +74,5 @@ server {
 ## Risks and Trade-offs
 
 - Docs are built only on release, so documentation merged to `main` is not live until the next release.
-- The build runs on the VPS with the host's Node (via `nvm`), which is outside Docker and can drift from the Node 24 used in CI.
+- A manual fallback build of the web image on the VPS needs the docs built there first (`npm run docs:build` in `apps/docs`), since the Dockerfile copies the finished site.
 - Sharing one certificate keeps renewal simple; dropping either domain from `init-ssl.sh` would break HTTPS for it on the next issuance.
