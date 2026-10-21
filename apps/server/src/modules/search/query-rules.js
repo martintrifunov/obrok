@@ -9,6 +9,8 @@ const FILLER = new Set([
   "кој", "која", "кое", "кои", "koj", "koja", "koe", "koi",
   "каде", "kade", "најди", "najdi", "барам", "baram", "сакам", "sakam",
   "има", "ima", "ли", "li", "ми", "mi", "е", "e",
+  // "нај евтино" typed as two words.
+  "нај", "naj",
 ]);
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;

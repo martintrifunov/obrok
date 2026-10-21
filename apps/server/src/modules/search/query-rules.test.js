@@ -9,6 +9,7 @@ describe("parseSearchQuery", () => {
     ["najskapo vino", "vino", "desc"],
     ["најскапото вино", "вино", "desc"],
     ["koj e najeftiniot sok od portokal", "sok od portokal", "asc"],
+    ["нај евтино млеко", "млеко", "asc"],
   ])("reads price intent from %j", (query, searchTerms, priceSort) => {
     expect(parseSearchQuery(query)).toMatchObject({ searchTerms, priceSort });
   });
