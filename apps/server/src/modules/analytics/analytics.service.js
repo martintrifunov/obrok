@@ -21,15 +21,6 @@ export class AnalyticsService {
       seenAt,
     });
 
-    await this.analyticsRepository.createEvent({
-      visitorId,
-      userId: userId || null,
-      identityKey,
-      eventType: AnalyticsEventType.HEARTBEAT,
-      path: path || null,
-      occurredAt: seenAt,
-    });
-
     // Count visits only on route/page transitions, not every keepalive ping.
     if (isPageView && path) {
       await this.analyticsRepository.createEvent({
@@ -129,7 +120,6 @@ export class AnalyticsService {
     return {
       fileName: `insights-${summary.range.from.toISOString().slice(0, 10)}-to-${summary.range.to.toISOString().slice(0, 10)}.csv`,
       csv,
-      summary,
     };
   }
 

@@ -15,23 +15,17 @@ export class AnalyticsController {
   };
 
   summary = async (req, res) => {
-    const days = req.query.days ? Number(req.query.days) : 30;
-    const result = await this.analyticsService.getSummary({ days, activeWindowMinutes: 5 });
+    const result = await this.analyticsService.getSummary({ days: req.query.days });
     res.status(200).json(result);
   };
 
   featureTrends = async (req, res) => {
-    const days = req.query.days ? Number(req.query.days) : 30;
-    const result = await this.analyticsService.getFeatureUsageTrend({ days });
+    const result = await this.analyticsService.getFeatureUsageTrend({ days: req.query.days });
     res.status(200).json(result);
   };
 
   exportCsv = async (req, res) => {
-    const days = req.query.days ? Number(req.query.days) : 30;
-    const { csv, fileName } = await this.analyticsService.exportSummaryCsv({
-      days,
-      activeWindowMinutes: 5,
-    });
+    const { csv, fileName } = await this.analyticsService.exportSummaryCsv({ days: req.query.days });
 
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);

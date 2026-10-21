@@ -26,7 +26,7 @@ Tracks visitor and user behavior — page views, feature usage, session activity
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/analytics/heartbeat` | Public | Track page view / activity |
+| `POST` | `/analytics/heartbeat` | Public | Mark the visitor active; records a page view on page changes |
 | `GET` | `/analytics/summary` | JWT | Dashboard summary data |
 | `GET` | `/analytics/feature-trends` | JWT | Feature usage trends |
 | `GET` | `/analytics/export` | JWT (admin) | CSV export |
@@ -35,14 +35,16 @@ Tracks visitor and user behavior — page views, feature usage, session activity
 
 **AnalyticsEvent**
 ```
-type     : PAGE_VIEW | HEARTBEAT | FEATURE_USAGE
+type     : PAGE_VIEW | FEATURE_USAGE
 visitorId: String
 userId   : ObjectId → User (optional)
 metadata : Object
 createdAt: Date
 ```
 
-**AnalyticsMonthlyAggregate** — pre-computed monthly rollups.
+**VisitorSession**: one per visitor, its last-seen time updated by each heartbeat. Active users are counted from these, so heartbeats add no events.
+
+**AnalyticsMonthlyAggregate**: pre-computed monthly rollups.
 
 ### Cron Job
 

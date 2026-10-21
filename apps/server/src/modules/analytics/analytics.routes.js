@@ -7,9 +7,7 @@ import verifyAdminUser from "../auth/middleware/verifyAdminUser.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
 import {
   analyticsHeartbeatSchema,
-  analyticsSummaryQuerySchema,
-  analyticsFeatureTrendQuerySchema,
-  analyticsExportQuerySchema,
+  analyticsDaysQuerySchema,
 } from "./analytics.schema.js";
 import { createRateLimiter } from "../../shared/middleware/rateLimiter.js";
 
@@ -33,7 +31,7 @@ router.get(
   "/summary",
   verifyJWT,
   verifyAdmin,
-  validateRequest(analyticsSummaryQuerySchema, "query"),
+  validateRequest(analyticsDaysQuerySchema, "query"),
   analyticsController.summary,
 );
 
@@ -41,7 +39,7 @@ router.get(
   "/feature-trends",
   verifyJWT,
   verifyAdmin,
-  validateRequest(analyticsFeatureTrendQuerySchema, "query"),
+  validateRequest(analyticsDaysQuerySchema, "query"),
   analyticsController.featureTrends,
 );
 
@@ -49,7 +47,7 @@ router.get(
   "/export",
   verifyJWT,
   verifyAdminUser,
-  validateRequest(analyticsExportQuerySchema, "query"),
+  validateRequest(analyticsDaysQuerySchema, "query"),
   analyticsController.exportCsv,
 );
 
