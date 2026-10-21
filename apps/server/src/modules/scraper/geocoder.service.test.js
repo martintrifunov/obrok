@@ -101,6 +101,18 @@ describe("GeocoderService", () => {
 
       globalThis.fetch = originalFetch;
     });
+
+    it("only sends queries that have the parts they need", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+
+      await service.geocode("НОВА ЛОКАЦИЈА 3", "Македонија", undefined);
+
+      const queries = globalThis.fetch.mock.calls.map(([url]) => new URL(url).searchParams.get("q"));
+      expect(queries).toEqual(["НОВА ЛОКАЦИЈА 3, , Македонија"]);
+
+      globalThis.fetch = originalFetch;
+    });
   });
 
   describe("geocode — Nominatim rate limiting", () => {

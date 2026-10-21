@@ -164,12 +164,13 @@ export class GeocoderService {
       .split("–")[0]
       .trim();
 
+    // Skip queries whose address or city is missing: each costs a throttled request.
     const queries = [
-      `${cleanAddress}, ${city}, ${suffix}`,
+      cleanAddress && `${cleanAddress}, ${city}, ${suffix}`,
       `${storeName}, ${city}, ${suffix}`,
-      `${transliterate(cleanAddress)}, ${transliterate(city)}, North Macedonia`,
-      `${city}, ${suffix}`,
-    ].filter((q) => q.length > 10);
+      cleanAddress && `${transliterate(cleanAddress)}, ${transliterate(city)}, North Macedonia`,
+      city && `${city}, ${suffix}`,
+    ].filter((q) => q && q.length > 10);
 
     for (const q of queries) {
       console.log(`[GeocoderService] Querying: "${q}"`);
