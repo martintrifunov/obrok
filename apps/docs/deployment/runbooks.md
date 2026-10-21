@@ -83,8 +83,7 @@ curl -sI https://docs.obrok.net | head -1
 
   ```bash
   cp -r data/map data/map.bak
-  rm data/map/macedonia-latest.osm.pbf   # otherwise wget saves the new download as .pbf.1 and the old file is processed
-  ./init-route-data.sh
+  ./init-route-data.sh                  # replaces the download and rebuilds the .osrm files
   dc restart osrm
   ```
 
