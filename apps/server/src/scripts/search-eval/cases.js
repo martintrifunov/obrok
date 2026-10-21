@@ -48,7 +48,7 @@ export const ingredientCases = [
   { name: "компир", expect: /КОМПИР/i, forbid: /ЧИПС|СТИК|КРОКЕТ/i },
   { name: "мелено месо", expect: /МЕЛЕН|MELEN/i, forbid: /ЗАЧИН|ПИПЕР/i },
   { name: "ориз", expect: /ОРИЗ/i, forbid: /ВАФЛ|ЧОКОЛ|МЛЕКО|КРЕКЕР|ГАЛЕТ/i },
-  { name: "маслиново масло", expect: /МАСЛИН|ВИРЏИН|VIRGIN/i, forbid: /ЗА ТЕЛО|САПУН|КРЕМА|МАСЛИНКИ/i },
+  { name: "маслиново масло", expect: /МАСЛИН|ВИРЏИН|ВИРГИН|VIRGIN/i, forbid: /ЗА ТЕЛО|САПУН|КРЕМА|МАСЛИНКИ/i },
 ];
 
 /** Meal decomposition by the intent parser (costs one LLM call each). */

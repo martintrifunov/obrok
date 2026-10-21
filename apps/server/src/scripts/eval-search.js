@@ -22,6 +22,7 @@ import "../modules/image/image.model.js";
 import { searchCases, ingredientCases, mealCases } from "./search-eval/cases.js";
 import { transliterateLatinToCyrillic } from "../shared/utils/bilingualRegex.js";
 import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
+import { parsePackSize } from "../shared/utils/packSize.js";
 
 const TOP_K = 5;
 const args = process.argv.slice(2);
@@ -99,10 +100,14 @@ async function evalIngredients(smartSearchService) {
     const picks = [...value.offers.values()];
     const good = picks.filter((o) => relevant(o.product?.title || "", c)).length;
     const titles = [...new Set(picks.map((o) => o.product?.title || ""))];
+    const sized = picks.filter((o) => parsePackSize(o.product?.title || "")).length;
     rows.push({
       q: c.name,
       precision: picks.length ? good / picks.length : 0,
       markets: picks.length,
+      usual: value.usual ?? null,
+      sized: picks.length ? sized / picks.length : 0,
+      medianPrice: percentile(picks.map((o) => o.price), 50),
       ms,
       titles: titles.filter((t) => !relevant(t, c)).slice(0, 4),
     });
@@ -178,9 +183,14 @@ async function main() {
   report("Product search (precision@5)", search, (r) =>
     r.priceOk === null ? "" : r.priceOk ? "  [price order ok]" : "  [PRICE ORDER WRONG]",
   );
-  report("Meal ingredient picks (share of markets priced with a right product)", ingredients, (r) =>
-    `  (${r.markets} markets)`,
-  );
+  report("Meal ingredient picks (share of markets priced with a right product)", ingredients, (r) => {
+    const usual = r.usual ? `usual ${r.usual.amount}${r.usual.unit}` : "no usual pack";
+    return `  (${r.markets} markets, ${usual}, ${pct(r.sized)} sized, median ${r.medianPrice} ден)`;
+  });
+  if (ingredients.length) {
+    const sized = ingredients.reduce((s, r) => s + r.sized, 0) / ingredients.length;
+    console.log(`=> pack size read from ${pct(sized)} of picked titles`);
+  }
   report("Meal decomposition", meals, (r) => (r.intentOk ? "" : "  [NOT RECIPE]"));
 
   console.log(
