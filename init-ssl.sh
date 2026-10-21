@@ -53,7 +53,10 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint "\
     -subj '/CN=localhost'" certbot
 
 echo "### Starting nginx ..."
-docker compose -f docker-compose.prod.yml up --build --force-recreate -d nginx
+# Uses the release images named by OBROK_TAG in .env; missing ones are built locally
+# (build the docs first: apps/docs, npm run docs:build).
+docker compose -f docker-compose.prod.yml pull --ignore-pull-failures nginx api
+docker compose -f docker-compose.prod.yml up --force-recreate -d nginx
 
 echo "### Deleting dummy certificate for $cert_name ..."
 docker compose -f docker-compose.prod.yml run --rm --entrypoint "\

@@ -1,0 +1,77 @@
+name: CI
+
+# Every pull request and push to develop is checked; the deploy workflow runs
+# the same checks before a release goes out.
+on:
+  pull_request:
+  push:
+    branches: [develop]
+  workflow_call:
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./apps/server
+
+    env:
+      # Tests mock the browser; skip Puppeteer's Chrome download.
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+  client:
+    name: Client
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./apps/client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      # The production image builds the client too; catch a broken build before deploy.
+      - name: Build
+        run: npm run build

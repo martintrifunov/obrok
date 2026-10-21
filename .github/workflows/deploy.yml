@@ -7,49 +7,64 @@ on:
 jobs:
   test:
     name: Run Tests
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build Images
+    needs: [test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      OBROK_TAG: ${{ github.ref_name }}
+      # Optional repository variables; unset ones fall back to the production defaults in docker-compose.prod.yml.
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+      VITE_OSRM_URL: ${{ vars.VITE_OSRM_URL }}
+      VITE_DEFAULT_VISIBLE_CHAINS: ${{ vars.VITE_DEFAULT_VISIBLE_CHAINS }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The docs show each page's last update from git history.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: apps/docs/package-lock.json
 
-      - name: Install server dependencies
-        working-directory: ./apps/server
-        run: npm ci
+      - name: Build docs
+        working-directory: ./apps/docs
+        run: |
+          npm ci
+          npm run docs:build
 
-      - name: Lint server
-        working-directory: ./apps/server
-        run: npm run lint
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Typecheck server
-        working-directory: ./apps/server
-        run: npm run typecheck
-
-      - name: Run server tests
-        working-directory: ./apps/server
-        run: npm test
-
-      - name: Install client dependencies
-        working-directory: ./apps/client
-        run: npm ci
-
-      - name: Lint client
-        working-directory: ./apps/client
-        run: npm run lint
-
-      - name: Run client tests
-        working-directory: ./apps/client
-        run: npm test
+      - name: Build and push images
+        run: |
+          # The api service reads .env at runtime; compose only needs the file to exist here.
+          touch .env
+          docker compose -f docker-compose.prod.yml build nginx api
+          docker compose -f docker-compose.prod.yml push nginx api
 
   deploy:
     name: Deploy to Production
-    needs: [test]
+    needs: [build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Execute Deployment over SSH
@@ -57,45 +72,37 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           APP_DIR: ${{ vars.VPS_APP_DIR || '/home/maco/projects/obrok' }}
+          GHCR_USER: ${{ github.actor }}
+          # Valid only while this job runs; used to pull the images, then logged out.
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           passphrase: ${{ secrets.VPS_PASSPHRASE }}
-          envs: RELEASE_TAG,APP_DIR
+          envs: RELEASE_TAG,APP_DIR,GHCR_USER,GHCR_TOKEN
           script: |
             set -e
 
-            # Load nvm so the SSH session uses the correct Node version
-            export NVM_DIR="$HOME/.nvm"
-            source "$NVM_DIR/nvm.sh"
-
-            # Navigate to the app checkout on the VPS (override with the VPS_APP_DIR repo variable)
             cd "$APP_DIR"
-            
-            echo "--- Fetching latest code for $RELEASE_TAG ---"
+
+            echo "--- Checking out $RELEASE_TAG (compose file and nginx config) ---"
             # --force: a release tag that was deleted and re-created must replace the old one
             git fetch --tags --force
-            git checkout -f $RELEASE_TAG
-            
-            echo "--- Injecting Dynamic Version into Frontend ---"
-            # Ensure the client .env exists and add the version tag to it
-            touch apps/client/.env
-            sed -i '/VITE_RELEASE_VERSION/d' apps/client/.env
-            echo "VITE_RELEASE_VERSION=$RELEASE_TAG" >> apps/client/.env
-            
-            echo "--- Building Documentation ---"
-            cd apps/docs
-            npm ci
-            rm -rf .vitepress/cache
-            npm run docs:build
-            cd ../..
-            
-            echo "--- Rebuilding Docker Containers ---"
-            docker compose -f docker-compose.prod.yml up --build -d
-            
-            echo "--- Restarting Nginx to pick up new docs ---"
-            docker restart obrok_nginx
-            
-            echo "--- Cleaning up old dangling images ---"
-            docker image prune -f
+            git checkout -f "$RELEASE_TAG"
+
+            echo "--- Recording the release in .env (OBROK_TAG picks the images) ---"
+            [ -n "$(tail -c1 .env)" ] && echo >> .env
+            sed -i '/^OBROK_TAG=/d' .env
+            echo "OBROK_TAG=$RELEASE_TAG" >> .env
+
+            echo "--- Pulling images ---"
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker compose -f docker-compose.prod.yml pull nginx api
+            docker logout ghcr.io
+
+            echo "--- Starting containers ---"
+            docker compose -f docker-compose.prod.yml up -d --no-build
+
+            echo "--- Removing images unused for 30 days (older releases stay in GHCR) ---"
+            docker image prune -af --filter "until=720h"

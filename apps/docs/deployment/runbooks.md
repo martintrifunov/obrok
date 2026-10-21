@@ -114,19 +114,14 @@ curl -sI https://docs.obrok.net | head -1
 ### Docs Site Shows An Old Version
 
 - **Symptom**: `docs.obrok.net` does not show changes that are merged.
-- **Cause**: docs are rebuilt only when a release is published, or the build on the VPS failed.
-- **Fix**: publish a release, or rebuild by hand:
-
-  ```bash
-  cd apps/docs && npm ci && rm -rf .vitepress/cache && npm run docs:build && cd ../..
-  docker restart obrok_nginx
-  ```
+- **Cause**: the docs ship inside the web image, which is built only when a release is published.
+- **Fix**: publish a release. Check that `OBROK_TAG` in the root `.env` is the newest tag (`grep OBROK_TAG .env`) and that `obrok_nginx` runs that image (`docker compose -f docker-compose.prod.yml images nginx`).
 
 ### Release Deploy Failed
 
 - **Symptom**: the `Deploy to VPS` workflow is red.
-- **Cause**: the `test` job failed (nothing was deployed), or a step on the VPS failed (the checkout may already be on the new tag).
-- **Fix**: read the failed step in GitHub Actions. For a VPS failure, rerun the steps from [Release Pipeline](/deployment/prod-environment#release-pipeline) by hand, or check out the previous tag and run `dc up --build -d` to roll back.
+- **Cause**: `test` or `build` failed (nothing reached the VPS), or a step on the VPS failed (the checkout and `OBROK_TAG` may already be on the new tag).
+- **Fix**: read the failed step in GitHub Actions. After a fix, re-run the failed jobs from the run page. To go back to the previous release, follow [Rollback](/deployment/prod-environment#rollback).
 
 ## Source Anchors
 

@@ -40,7 +40,7 @@ Or from the repository root with Docker: `docker compose -f docker-compose.dev.y
 
 ### What CI Does
 
-- Pull requests touching `apps/docs/**` run `.github/workflows/docs-ci.yml`, which fails if the build fails.
+- Pull requests touching `apps/docs/**` run `.github/workflows/docs-ci.yml`, which fails if the build fails. Code changes are checked by `.github/workflows/ci.yml` on every pull request.
 - Docs go live only when a release is published. Details in [docs.obrok.net Hosting](/deployment/docs-obrok-net#how-it-ships).
 
 ## Source Anchors

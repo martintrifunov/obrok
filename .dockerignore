@@ -1,0 +1,8 @@
+# Context for apps/nginx/Dockerfile, built from the repository root.
+.git
+data
+**/node_modules
+**/.env
+apps/client/dist
+apps/docs/.vitepress/cache
+apps/server
