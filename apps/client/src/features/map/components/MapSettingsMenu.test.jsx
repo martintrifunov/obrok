@@ -14,6 +14,9 @@ const renderMenu = (props = {}) =>
     />,
   );
 
+const tokenFor = (role) =>
+  ["header", btoa(JSON.stringify({ UserInfo: { username: "ana", role } })).replace(/=+$/, ""), "sig"].join(".");
+
 const actionLabels = () =>
   screen
     .getAllByRole("button", { hidden: true })
@@ -30,8 +33,8 @@ describe("MapSettingsMenu", () => {
     expect(actionLabels()).toEqual(["Промени тема", "Филтрирај маркети", "Најава"]);
   });
 
-  it("shows dashboard, theme, filter and logout actions for logged-in users", () => {
-    useAuthStore.setState({ auth: { accessToken: "token" } });
+  it("shows dashboard, theme, filter and logout actions for admins", () => {
+    useAuthStore.setState({ auth: { accessToken: tokenFor("admin") } });
     renderMenu();
     expect(actionLabels()).toEqual([
       "Контролна табла",
@@ -39,6 +42,12 @@ describe("MapSettingsMenu", () => {
       "Филтрирај маркети",
       "Одјава",
     ]);
+  });
+
+  it("hides the dashboard from logged-in users who aren't admins", () => {
+    useAuthStore.setState({ auth: { accessToken: tokenFor("user") } });
+    renderMenu();
+    expect(actionLabels()).toEqual(["Промени тема", "Филтрирај маркети", "Одјава"]);
   });
 
   it("lists chains in the filter with their visibility and toggles them", async () => {

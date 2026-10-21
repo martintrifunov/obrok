@@ -45,5 +45,5 @@ All of these sit behind `RequireAuth` (see [Routing And Access Control](../routi
 
 ## Risks and Trade-offs
 
-- Tabs are shown to every logged-in user. Insights, reports, flags and all writes are admin-only on the server, so a non-admin sees tabs that fail.
+- Only admins reach the dashboard (`RequireAuth`) or see its button on the map (`MapSettingsMenu`). The check is cosmetic; the server enforces the admin role on every admin call.
 - The section list lives in `DashboardLayout` and the routes in `App.jsx`; adding a section means editing both.

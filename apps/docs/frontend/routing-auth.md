@@ -38,9 +38,7 @@ Section pages and forms are listed on the [Dashboard Feature](./features/dashboa
 ### Guard Order
 
 1. `PersistLogin` wraps the map, login and dashboard. If "Trust this device" is on and there is no access token, it calls `GET /refresh` once on mount and shows `GlobalLoadingProgress` until that settles. A failed refresh is swallowed.
-2. `RequireAuth` renders its children only when `auth.accessToken` is set. Otherwise it redirects to `/login` with `state.from`, so the login page can send the user back.
-
-`RequireAuth` checks only that a token exists. It does not check the role: a logged-in non-admin sees every dashboard tab, and the server answers admin-only calls with 403.
+2. `RequireAuth` redirects guests to `/login` with `state.from`, so the login page can send them back, and sends logged-in users who aren't admins to the map. The role is read from the access token (`roleFromToken`, exposed as `useAuth().isAdmin`); the server still checks it on every admin request.
 
 ### Mid-Session Expiry
 
@@ -60,4 +58,4 @@ Section pages and forms are listed on the [Dashboard Feature](./features/dashboa
 ## Risks and Trade-offs
 
 - `PersistLogin` wraps the public map too, so a trusted device waits for the refresh call before the map renders.
-- There is no client-side role check. Non-admin users can open admin pages and only find out from failed requests.
+- The client reads the role from the token without verifying it. That only decides what is shown; a forged token still fails on the server.

@@ -59,5 +59,5 @@ Logout is available from the dashboard header and the map settings menu.
 ## Risks and Trade-offs
 
 - Keeping the access token in memory limits exposure to XSS, at the cost of a refresh call on every reload for trusted devices and a full re-login for untrusted ones.
-- The client stores no role, so it cannot hide admin-only features from non-admin users.
+- The role is decoded from the access token on each render (`roleFromToken`) instead of stored, so it is always the token's current role.
 - Login error text is chosen by status code, so the server's own messages (such as the rate-limit message) are not shown.
