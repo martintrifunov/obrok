@@ -4,6 +4,7 @@ import { ProductModel } from "../product/product.model.js";
 const BATCH_SIZE = 50;
 const CURSOR_BATCH_SIZE = 500;
 
+/** @returns {Promise<boolean>} false only if generation failed (the error is logged) */
 export async function syncProductEmbeddings({
   embeddingService,
   productEmbeddingRepository,
@@ -15,14 +16,14 @@ export async function syncProductEmbeddings({
   try {
     if (!embeddingService?.isAvailable()) {
       logger.log(`${logPrefix} Embedding service not available, skipping.`);
-      return;
+      return true;
     }
 
     if (featureFlagService) {
       const aiSearchEnabled = await featureFlagService.isEnabled("ai-search");
       if (!aiSearchEnabled) {
         logger.log(`${logPrefix} ai-search feature flag disabled, skipping embeddings.`);
-        return;
+        return true;
       }
     }
 
@@ -56,7 +57,7 @@ export async function syncProductEmbeddings({
         `(${totalProducts - toEmbed.length} up-to-date).`,
     );
 
-    if (toEmbed.length === 0) return;
+    if (toEmbed.length === 0) return true;
 
     let processed = 0;
     for (let index = 0; index < toEmbed.length; index += BATCH_SIZE) {
@@ -81,5 +82,7 @@ export async function syncProductEmbeddings({
     logger.log(`${logPrefix} Embedding generation complete. ${processed} embeddings created.`);
   } catch (err) {
     logger.error(`${logPrefix} Embedding generation failed: ${err.message}`);
+    return false;
   }
+  return true;
 }

@@ -26,7 +26,7 @@ const main = async () => {
   await mongoose.connect(dbUri);
   console.log(`[Embeddings] Connected to MongoDB. Force mode: ${force ? "ON" : "OFF"}`);
 
-  await syncProductEmbeddings({
+  const ok = await syncProductEmbeddings({
     embeddingService,
     productEmbeddingRepository: new ProductEmbeddingRepository(),
     featureFlagService: null,
@@ -35,6 +35,7 @@ const main = async () => {
   });
 
   await mongoose.disconnect();
+  if (!ok) process.exitCode = 1;
 };
 
 main().catch((err) => {
