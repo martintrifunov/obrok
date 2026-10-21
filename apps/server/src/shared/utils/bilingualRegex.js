@@ -166,8 +166,9 @@ export const buildBilingualRegex = (text) => {
   const variants = spellingVariants(text).map(escapeRegExp);
   if (!ASCII_RE.test(text)) return variants.join("|");
 
-  // ASCII input yields exactly [as typed, Cyrillic transliteration].
-  const [latin, cyrillic] = variants;
+  // ASCII input yields [as typed, Cyrillic transliteration], or just one
+  // variant when nothing transliterates ("500", "3%").
+  const [latin, cyrillic = latin] = variants;
   return [widen(latin, LATIN_AMBIGUOUS), widen(cyrillic, CYRILLIC_AMBIGUOUS)].join("|");
 };
 

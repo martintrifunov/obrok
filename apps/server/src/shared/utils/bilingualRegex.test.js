@@ -121,3 +121,14 @@ describe("buildWordStartMatcher", () => {
     expect(check("", "Сол")).toBe(false);
   });
 });
+
+describe("ASCII input with nothing to transliterate", () => {
+  it.each(["500", "3%", "{1}"])("builds a regex for %j", (text) => {
+    expect(() => buildBilingualTokenRegexes(text)).not.toThrow();
+    expect(buildWordStartMatcher(`млеко ${text}`)("x")).toBe(false);
+  });
+
+  it("still matches the number", () => {
+    expect(new RegExp(buildBilingualRegex("500"), "iu").test("ЛЕБ 500Г")).toBe(true);
+  });
+});
