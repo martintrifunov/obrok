@@ -29,6 +29,6 @@ export const isModelUnavailableError = (err) => {
  */
 export const retryDelayMs = (err, attempt, maxMs) => {
   const retryIn = String(/** @type {any} */ (err)?.message || "").match(/retry in ([\d.]+)s/i);
-  if (retryIn) return Math.ceil(Number(retryIn[1]) * 1000);
+  if (retryIn) return Math.min(maxMs, Math.ceil(Number(retryIn[1]) * 1000));
   return Math.min(maxMs, 2_000 * 2 ** attempt) + Math.floor(Math.random() * 500);
 };
