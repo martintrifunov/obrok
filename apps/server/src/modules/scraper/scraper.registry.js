@@ -12,6 +12,6 @@ const SCRAPERS = {
 
 export const SCRAPER_KEYS = Object.keys(SCRAPERS);
 
-export const createScraper = (key) => (SCRAPERS[key] ? new SCRAPERS[key]() : null);
+export const createScraper = (key) => (Object.hasOwn(SCRAPERS, key) ? new SCRAPERS[key]() : null);
 
 export const createAllScrapers = () => SCRAPER_KEYS.map(createScraper);
