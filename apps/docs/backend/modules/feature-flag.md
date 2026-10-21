@@ -6,49 +6,55 @@ title: Feature Flag Module
 
 ## Public Summary
 
-Runtime feature toggles for conditional feature enablement across the application.
+Boolean flags stored in MongoDB that turn the AI search features on and off at runtime. Admins toggle them from the dashboard; no restart is needed.
 
 ## Internal Details
-
-### Files
-
-Standard CRUD layer: controller, service, routes, schema, model, repository (7 files).
 
 ### Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/flags` | Public | Key-value flag list (public consumption) |
-| `GET` | `/flags/admin` | JWT | Detailed flag list with metadata |
-| `PUT` | `/flags/:id` | JWT | Toggle flag |
+| `GET` | `/api/flags` | Public | `{ [key]: enabled }` map |
+| `GET` | `/api/flags/admin` | JWT, role `admin` | Full flag documents |
+| `PUT` | `/api/flags` | JWT, role `admin` | Body `{ key, enabled, description? }`. Upserts by `key` and returns the flag |
 
-### Data Model — FeatureFlag
+`PUT` upserts, so an unknown `key` creates a new flag.
+
+### Data Model: FeatureFlag (`feature_flags`)
 
 ```
 key        : String (unique, required)
-enabled    : Boolean (default: false)
-description: String
+enabled    : Boolean (required, default false)
+description: String (optional)
+createdAt, updatedAt: Date
 ```
 
-### Current Flags
+### Flags
 
-| Key | Purpose |
-|-----|---------|
-| `ai-search` | Enables hybrid vector+keyword search |
-| `smart-search` | Enables recipe decomposition search |
+Seeded at startup by `seedFeatureFlags` (only when missing, so admin changes survive restarts). Both start disabled.
 
-### Integration Pattern
+| Key | Gates |
+|-----|-------|
+| `ai-search` | Hybrid search (returns no results when off), embedding sync after scrapes, vector index load at startup |
+| `smart-search` | Smart search (when off it answers 200 with `error: "Smart search is not enabled."`) |
 
-Backend services check flags at runtime:
-```js
-const flag = await featureFlagService.getByKey('ai-search');
-if (flag?.enabled) { /* use AI path */ }
-```
+See [Search](/backend/modules/search) for what each feature does.
 
-Frontend fetches flags on load via `featureFlagStore` and gates UI components.
+### Usage
+
+- Server: `featureFlagService.isEnabled(key)` returns `false` for a missing flag. It reads MongoDB on every call; there is no cache.
+- Client: `useFeatureFlagStore` (`store/featureFlagStore.js`) loads `/flags` once; `useFeatureFlag(key)` reads it. The admin flags page calls `refetchFlags()` after a change.
 
 ## Source Anchors
 
 | Path | Relevance |
 |------|-----------|
-| `apps/server/src/modules/feature-flag/` | Controller, service, routes, schema, model, repository |
+| `apps/server/src/modules/feature-flag/` | Routes, controller, service, repository, schema, model |
+| `apps/server/src/infrastructure/database/seed-feature-flags.js` | Default flags |
+| `apps/client/src/store/featureFlagStore.js` | Client flag store |
+| `apps/client/src/hooks/useFeatureFlag.js` | Client hook |
+
+## Risks and Trade-offs
+
+- Other open browser tabs keep their loaded flags until reload.
+- Any string can become a flag through `PUT`; nothing checks that code reads it.

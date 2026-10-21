@@ -6,37 +6,54 @@ title: Public Holiday Module
 
 ## Public Summary
 
-Manages public holiday dates used by smart search budget calculations and work schedule awareness.
+Admin-managed list of public holidays. Smart search uses it to count the work days in the current week when it computes the weekly budget.
 
 ## Internal Details
 
-### Files
-
-Standard CRUD layer: controller, service, routes, schema, model, repository (7 files).
-
 ### Endpoints
+
+Mounted at `/api/public-holidays`. "Admin" means `verifyJWT` + `verifyAdmin`. Update and delete take the `id` in the JSON body.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `GET` | `/public-holidays` | Public | List holidays (paginated, filterable) |
-| `GET` | `/public-holidays/:id` | JWT | Holiday detail |
-| `POST` | `/public-holidays` | JWT | Create holiday |
-| `PUT` | `/public-holidays/:id` | JWT | Update holiday |
-| `DELETE` | `/public-holidays/:id` | JWT | Delete holiday |
+| `GET` | `/public-holidays` | Public | List, sorted by date. Query: `page`, `limit`, `name` (case-insensitive substring), `from`, `to` (inclusive date range) |
+| `GET` | `/public-holidays/:id` | Public | Holiday detail |
+| `POST` | `/public-holidays` | Admin | Create. Body: `name`, `date` |
+| `PUT` | `/public-holidays` | Admin | Update. Body: `id`, optional `name`, `date` |
+| `DELETE` | `/public-holidays` | Admin | Delete. Body: `id` |
 
-### Data Model — PublicHoliday
+Pagination uses `paginationSchema`: default `limit` 10, max 100, and `limit=0` is rejected. Ids are checked by the shared `idSchema`.
+
+### Data Model
+
+Collection `public_holidays`:
 
 ```
-name: String (required)
-date: Date (unique, required)
+name : String (required)
+date : Date (required, unique)
 ```
 
-### Usage
+A date string like `2026-10-03` is stored as UTC midnight. A second holiday on the same date returns 409.
 
-Smart search budget calculations use public holidays to adjust the number of working days in a period, affecting daily meal budget recommendations.
+### Usage in the Weekly Budget
+
+`SmartSearchService` loads the holidays between Monday and Saturday of the current week (Europe/Skopje calendar) and passes them to `calculateWeeklyBudget` (`shared/utils/obrokBudget.js`):
+
+- A week has 6 work days (Monday to Saturday); each holiday on one of those days removes one.
+- Budget = work days x 140.
+- When the week spans two months, the result also has one segment per month with its own days and budget.
 
 ## Source Anchors
 
 | Path | Relevance |
 |------|-----------|
-| `apps/server/src/modules/public-holiday/` | Controller, service, routes, schema, model, repository |
+| `apps/server/src/modules/public-holiday/public-holiday.routes.js` | Routes, auth and validation |
+| `apps/server/src/modules/public-holiday/public-holiday.schema.js` | Query and body schemas |
+| `apps/server/src/modules/public-holiday/public-holiday.repository.js` | Filters, date-range lookup |
+| `apps/server/src/modules/search/smart-search.service.js` | Budget computation (`#computeBudget`) |
+| `apps/server/src/shared/utils/obrokBudget.js` | Work-day and budget calculation |
+
+## Risks and Trade-offs
+
+- Holidays are entered by hand; a missing holiday overstates that week's budget.
+- One holiday per date: two names for the same day must share one record.
