@@ -6,19 +6,24 @@ title: How To Read This Site
 
 ## Public Summary
 
-Start with Architecture, then go to Backend or Frontend based on your role. Use Deployment if you are running environments or releases.
+Start with [Architecture](/architecture/overview), then read Backend or Frontend depending on your work. Use Deployment when you run environments or releases.
 
 ## Internal Details
 
-### Suggested Reading Paths
+### Reading Paths
 
-- New engineer: Architecture -> Backend/Frontend Overview -> Deployment Overview -> Pattern Catalog.
-- Backend maintainer: Backend pages -> Jobs/Cron/Reports -> Deployment runbooks.
-- Frontend maintainer: Frontend pages -> Routing/Auth -> State/Data -> Map flows.
-- Ops maintainer: Deployment pages -> Runbooks -> CI/CD workflow references.
+| Role | Path |
+| --- | --- |
+| New engineer | [Architecture](/architecture/overview) → [Backend](/backend/overview) or [Frontend](/frontend/overview) → [Deployment](/deployment/overview) → [Pattern Catalog](/patterns/catalog) |
+| Backend | Backend pages → [Jobs, Cron, And Reports](/backend/jobs-cron-reports) → [Runbooks](/deployment/runbooks) |
+| Frontend | [Frontend Overview](/frontend/overview) → [Routing And Access Control](/frontend/routing-auth) → [State And Server Data](/frontend/state-data) → [Map And UX Flows](/frontend/map-flows) |
+| Operations | [Deployment Overview](/deployment/overview) → [Production Environment](/deployment/prod-environment) → [Runbooks](/deployment/runbooks) |
 
-### How To Navigate Depth
+### Reading A Page
 
-- If you only need high-level orientation, read only Public Summary sections.
-- If you need implementation behavior, read Internal Details and Source Anchors.
-- If you are making changes, review Risks and Trade-offs before editing code.
+Technical pages share the sections defined in the [Documentation Charter](/overview/docs-charter#page-template):
+
+- **Public Summary**: enough for orientation; stop here if that is all you need.
+- **Internal Details**: how it works, for people changing or operating it.
+- **Source Anchors**: the files to open next.
+- **Risks and Trade-offs**: read before changing the area.

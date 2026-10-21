@@ -6,22 +6,30 @@ title: Pattern Catalog
 
 ## Public Summary
 
-Obrok uses explicit, practical patterns to keep modules understandable and evolvable across backend and frontend.
+The recurring design patterns in Obrok and where to find each one. The decisions behind the larger ones are recorded in [Architecture Decision Records](/patterns/adrs).
 
 ## Internal Details
 
 | Pattern | Purpose | Where Used |
 | --- | --- | --- |
-| Dependency Injection Container | Central composition root for services/controllers | apps/server/src/container.js |
-| Controller-Service-Repository | Separation of transport, business, and persistence concerns | apps/server/src/modules/* |
-| Strategy + Registry | Plug-in market scraper implementations | apps/server/src/modules/scraper/markets and apps/server/src/modules/scraper/scraper.registry.js |
-| Middleware Pipeline | Ordered cross-cutting HTTP concerns | apps/server/src/app.js |
-| Feature Flag Gate | Runtime enablement of risky/experimental features | apps/server/src/modules/feature-flag and apps/client/src/store/featureFlagStore.js |
-| Query Key Factory | Predictable cache keys and invalidation | apps/client/src/features/*/hooks |
-| Fetch Private Retry | Access token refresh and replay on 401 | apps/client/src/api/fetch.js |
-| Persisted UI Store | Client preferences across sessions | apps/client/src/store/themeStore.js |
+| Composition root | Builds repositories, services and controllers in one place and wires their dependencies | `apps/server/src/container.js` |
+| Controller, service, repository | Separates HTTP handling, business logic and persistence in each module | `apps/server/src/modules/*` (for example `chain.controller.js`, `chain.service.js`, `chain.repository.js`) |
+| Strategy with registry | One scraper class per chain, all extending `BaseScraper`, looked up by key (`vero`, `ramstore`, `stokomak`, `kam`) | `apps/server/src/modules/scraper/markets/`, `apps/server/src/modules/scraper/scraper.registry.js` |
+| Middleware pipeline | Ordered cross-cutting HTTP concerns: Helmet, CORS, body parsing, cookies, visitor tracking, then routes and the error handler | `apps/server/src/app.js`, `apps/server/src/shared/middleware/` |
+| Feature flag gate | Turns AI features (`ai-search`, `smart-search`) on and off at runtime | `apps/server/src/modules/feature-flag/`, `apps/client/src/store/featureFlagStore.js`, `apps/client/src/hooks/useFeatureFlag.js` |
+| Query key factory | Predictable TanStack Query keys for caching and invalidation (for example `chainKeys`) | `apps/client/src/features/*/hooks/use*Queries.js` |
+| Private fetch with retry | Adds the access token, refreshes it once on `401`, and replays the request | `apps/client/src/api/fetch.js` (`fetchPrivate`) |
+| Persisted UI store | Keeps preferences across sessions with Zustand `persist` | `apps/client/src/store/themeStore.js` |
+
+## Source Anchors
+
+| Path | Relevance |
+| --- | --- |
+| `apps/server/src/container.js` | Server wiring |
+| `apps/server/src/app.js` | Middleware order and route mounting |
+| `apps/server/src/modules/scraper/scraper.registry.js` | Scraper registry |
+| `apps/client/src/api/fetch.js` | HTTP client |
 
 ## Risks and Trade-offs
 
-- Pattern consistency reduces cognitive load, but drift appears quickly if new modules skip standard layering.
-- Some patterns are manually enforced; automated linting or architecture checks can further reduce drift.
+- The patterns are enforced by convention only. A new module that skips the layering or the key factory goes unnoticed until review.

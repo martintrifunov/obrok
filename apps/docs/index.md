@@ -1,57 +1,36 @@
 ---
 title: Obrok Documentation
-description: Full-stack technical documentation for architecture, backend, frontend, deployment, and design patterns.
+description: Technical documentation for Obrok's architecture, backend, frontend, deployment, and design patterns.
 ---
 
 # Obrok Documentation
 
 ## Public Summary
 
-Obrok is a full-stack platform for market data ingestion, search, reporting, and route-aware exploration. The system combines:
+Obrok scrapes product prices from Macedonian market chains (Vero, Ramstore, Stokomak, KAM), lets users search ingredients and meals across them, and shows the markets on a map with routes. It consists of:
 
-- A React client with feature-based modules.
-- An Express API with layered architecture and cron-driven data ingestion.
-- MongoDB for operational data.
-- OSRM for routing.
-- Docker-based environments for development and production.
+- A React client (Vite) organized by feature.
+- An Express API with controller, service and repository layers, plus cron jobs for scraping and analytics cleanup.
+- MongoDB for all application data.
+- A self-hosted OSRM server for routing.
+- Docker Compose for development and production.
 
-Use this site to understand how the system is built, operated, and extended.
+## Where To Go
 
-## Internal Details
+| Section | Covers |
+| --- | --- |
+| [How It Works](/concepts/overview) | Plain-language explanation of search, geolocation and routing |
+| [Architecture](/architecture/overview) | System map and request flows |
+| [Backend](/backend/overview) | API modules, auth, scraping, search, jobs |
+| [Frontend](/frontend/overview) | Routing, state, map and dashboard features |
+| [Deployment](/deployment/overview) | Dev and prod environments, docs hosting, runbooks |
+| [Patterns](/patterns/catalog) | Pattern catalog and ADRs |
+| [Contributing](/contributing/docs-process) | When and how to update these docs |
 
-This documentation is written with two audiences in mind:
+Suggested reading paths and the page structure are in [How To Read This Site](/overview/how-to-read). Writing rules are in the [Documentation Charter](/overview/docs-charter).
 
-- Public/quick readers who need a short explanation of each area.
-- Internal contributors who need implementation depth, trade-offs, and runbooks.
+## Out Of Scope
 
-Each major page follows the same structure:
-
-1. Public Summary
-2. Internal Details
-3. Source Anchors
-4. Risks and Trade-offs
-
-## Documentation Map
-
-- [How It Works](/concepts/overview) — plain-language explanation of search, geolocation, and routing
-- [System Architecture](/architecture/overview)
-- [Backend](/backend/overview)
-- [Frontend](/frontend/overview)
-- [Deployment](/deployment/overview)
-- [Design Pattern Catalog](/patterns/catalog)
-- [Contributing To Docs](/contributing/docs-process)
-
-## Current Scope (v1)
-
-- Conceptual explanation of search, recipe decomposition, geolocation, and routing for readers who don't need implementation depth.
-- Full architecture map and cross-service flow documentation.
-- Backend module and operational flow documentation.
-- Frontend architecture and state/routing data flow documentation.
-- Deployment docs for local, production, and docs.obrok.net.
-- Pattern catalog and ADR baseline.
-
-## Out Of Scope (v1)
-
-- End-user product usage manuals.
-- Multi-language docs.
-- Auto-generated OpenAPI documentation portal.
+- End-user manuals.
+- Translations.
+- Generated API reference (OpenAPI).

@@ -1,125 +1,52 @@
 # Obrok
 
-Obrok is an open source web application that scrapes product data from nearby market chains and helps users plan affordable meals from real store inventory.
+Obrok is an open source web application that scrapes product prices from market chains in North Macedonia (Vero, Ramstore, Stokomak, KAM) and helps users plan affordable meals from what nearby stores actually sell.
 
-It combines a React frontend, an Express and MongoDB backend, OSRM routing, and a VitePress documentation site.
+Users can search ingredients across chains, let AI turn a meal into an ingredient list priced at real markets, and see the markets on a map with routes. Admins get a dashboard for managing data, reports, insights and feature flags. It is built with a React frontend, an Express and MongoDB backend, self-hosted OSRM routing, and a VitePress documentation site.
 
 [Documentation](https://docs.obrok.net) | [Website](https://obrok.net) | [Environment Templates](./ENV_TEMPLATES.md) | [License](./LICENSE)
 
-## Why Obrok?
-
-Students looking for affordable meals usually have to jump between market flyers, store searches, recipe ideas, and map tools. That workflow is fragmented, hard to compare, and not especially useful when the real question is what meal can be made from products that are actually available nearby.
-
-Obrok brings those pieces together. It collects product data from nearby chains, lets users search ingredients directly, and includes an AI recipe decomposition flow that turns meal searches into ingredient lists tied to real markets.
-
-## What It Includes
-
-- Scraped product data from nearby market chains
-- AI recipe decomposition for meal-oriented search and ingredient-based results
-- Ingredient-level search across chains, markets, and products
-- Interactive map browsing for markets and nearby locations
-- Route-aware travel estimates to selected markets through OSRM
-- Reporting, insights, feature flags, and supporting admin flows
-- Self-hosted development and deployment with Docker Compose
-- Maintained engineering documentation for architecture and operations
-
 ## Repository Layout
 
-- `apps/client` contains the React frontend built with Vite
-- `apps/server` contains the Express API, data workflows, and background jobs
-- `apps/docs` contains the VitePress documentation site
-- `apps/nginx` contains the production reverse proxy configuration
-- `data/map` stores OSRM routing data used by the map service
+- `apps/client`: React frontend (Vite)
+- `apps/server`: Express API, scrapers, cron jobs and CLI scripts
+- `apps/docs`: VitePress documentation site
+- `apps/nginx`: production Nginx configuration
+- `data/map`: OSRM routing data (created by `init-route-data.sh`)
 
 ## Quick Start
 
-The fastest way to run the project locally is through Docker Compose.
+Requires Docker with Docker Compose, and `wget`.
 
-### Prerequisites
+1. Create the root `.env` and `apps/client/.env` from [ENV_TEMPLATES.md](./ENV_TEMPLATES.md). For local use set `CLIENT_ORIGIN=http://localhost:3500`, `VITE_API_URL=http://localhost:5000` and `VITE_OSRM_URL=http://localhost:5001/route/v1`.
+2. Build the routing data: `./init-route-data.sh`
+3. Start the stack:
 
-1. Install Docker and Docker Compose.
-2. Configure the root `.env` file and `apps/client/.env` using [ENV_TEMPLATES.md](./ENV_TEMPLATES.md).
-3. Prepare OSRM data under `data/map`.
+   ```bash
+   docker compose -f docker-compose.dev.yml up --build
+   ```
 
-### Run the full stack
+| Service | URL |
+| --- | --- |
+| Frontend | `http://localhost:3500` |
+| API | `http://localhost:5000` |
+| OSRM | `http://localhost:5001` |
+| Docs | `http://localhost:5173` |
+| MongoDB | `localhost:6969` |
 
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
-### Local endpoints
-
-- Frontend: `http://localhost:3500`
-- Backend API: `http://localhost:5000`
-- OSRM: `http://localhost:5001`
-- Docs: `http://localhost:5173`
+Load data by running a scraper in the API container, for example `docker exec obrok_api npm run scrape kam` (keys: `vero`, `ramstore`, `stokomak`, `kam`; omit the key to scrape all).
 
 ## Documentation
 
-Project documentation lives in `apps/docs` and is published at [docs.obrok.net](https://docs.obrok.net). It covers architecture, backend modules, frontend flows, deployment, and engineering patterns.
+Everything else is at [docs.obrok.net](https://docs.obrok.net), with the source in `apps/docs`:
 
-### Run docs locally
+- [Development environment and server scripts](https://docs.obrok.net/deployment/dev-environment)
+- [Production setup, SSL and releases](https://docs.obrok.net/deployment/prod-environment)
+- [Runbooks](https://docs.obrok.net/deployment/runbooks)
+- [Docs process](https://docs.obrok.net/contributing/docs-process)
 
-```bash
-cd apps/docs
-npm install
-npm run docs:dev
-```
-
-### Run docs in Docker Compose
-
-```bash
-docker compose -f docker-compose.dev.yml build docs
-docker compose -f docker-compose.dev.yml up docs
-```
-
-### Build docs for verification
-
-```bash
-cd apps/docs
-npm run docs:build
-npm run docs:preview
-```
-
-## Development
-
-The repository is structured as a small monorepo with separate client, server, docs, and infrastructure directories.
-
-For day-to-day development:
-
-- Use `docker-compose.dev.yml` to run the full stack locally
-- Keep route data under `data/map` up to date before testing routing behavior
-- Use `apps/docs` for architecture and operational documentation updates alongside code changes
-
-## Production
-
-Production runs behind Nginx with TLS handled by Let's Encrypt via Certbot. The production stack is defined in `docker-compose.prod.yml`.
-
-### First-time server setup
-
-For a new VPS, bootstrap certificates and start the stack with:
-
-```bash
-CERTBOT_EMAIL=you@example.com ./init-ssl.sh
-```
-
-Run `./init-route-data.sh` first; the script checks for OSRM data because Nginx won't start without it. It creates temporary certificates, starts Nginx, requests real certificates, reloads the web server, and brings the application online. Existing certificates are backed up first and restored if the request fails.
-
-### Release workflow
-
-Deployments are triggered from GitHub Actions on published releases.
-
-1. Push the required changes.
-2. Create a GitHub release.
-3. Tag the release using the existing Calendar Versioning pattern, for example `v2026.03.13.1`.
-4. Publish the release.
-
-The deployment workflow connects to the VPS, pulls the tagged revision, rebuilds the docs site, injects the release version into the frontend environment, and recreates the production containers.
-
-## Contributing
-
-Contributions should keep code, deployment behavior, and documentation aligned. If a change affects architecture, flows, or operations, update the relevant docs in `apps/docs` as part of the same change set.
+Releases are deployed by publishing a GitHub release with a calendar version tag such as `v2026.03.13.1`.
 
 ## License
 
-This project is licensed under the terms in [LICENSE](./LICENSE).
+See [LICENSE](./LICENSE).

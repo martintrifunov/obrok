@@ -6,20 +6,20 @@ title: Documentation Charter
 
 ## Public Summary
 
-This charter defines how Obrok documentation is written so it stays consistent, useful, and maintainable.
+The rules for writing Obrok documentation: what every claim must be based on, how pages are structured, and who keeps each section current. The workflow for changing docs is in [Docs Process](/contributing/docs-process).
 
 ## Internal Details
 
-### Documentation Principles
+### Principles
 
-1. Prefer source-backed claims. Every technical statement should be traceable to implementation.
-2. Keep architecture current. Any change to flow, module boundaries, or deployment shape must include doc updates.
-3. Separate summary from depth. Pages start with a short public summary and then move into internal details.
-4. Explain trade-offs, not only design intent.
+1. Every technical statement must be traceable to code or configuration. If it cannot be verified, leave it out.
+2. A change to flows, module boundaries, configuration or deployment updates the docs in the same change.
+3. Each page has one job. Link to the page that owns a topic instead of repeating it.
+4. Explain trade-offs, not only intent.
 
 ### Page Template
 
-Each technical page should include these sections in order:
+Technical pages use these sections, in order:
 
 1. Public Summary
 2. Internal Details
@@ -27,21 +27,24 @@ Each technical page should include these sections in order:
 4. Risks and Trade-offs
 5. Next Extension Points (optional)
 
-### Diagram Standard
+### Diagrams
 
-- Use Mermaid in v1 for architecture, lifecycle, and flow diagrams.
-- Prefer simple node names over abbreviations.
-- Keep one primary diagram per page to avoid visual noise.
+- Use Mermaid for architecture, lifecycle and flow diagrams.
+- Use full names for nodes, not abbreviations.
+- At most one main diagram per page, and only when it matches the code.
 
-### Code Reference Standard
+### Code References
 
-- Reference implementation files by path.
-- Favor stable entry files (for example app/container/entrypoint) over volatile internals unless needed.
-- When documenting behavior, include at least one concrete route, hook, or service function path.
+- Reference files by repository path, and make sure the path exists.
+- Prefer stable entry points (`apps/server/src/app.js`, `apps/server/src/container.js`, route files) over internals.
+- When describing behavior, name at least one concrete route, hook or service function.
+- Commands must run as written, for example `docker exec obrok_api npm run scrape kam`.
 
-### Documentation Ownership
+### Ownership
 
-- Backend pages: backend maintainers.
-- Frontend pages: frontend maintainers.
-- Deployment pages: ops/release maintainers.
-- Pattern and ADR pages: architecture owners.
+| Pages | Owner |
+| --- | --- |
+| Backend | Backend maintainers |
+| Frontend | Frontend maintainers |
+| Deployment | Release and operations maintainers |
+| Patterns and ADRs | Architecture owners |
