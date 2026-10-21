@@ -4,7 +4,7 @@ import { MarketProductModel } from "../product/market-product.model.js";
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(String(id));
 
-const buildFieldMatchClauses = (patterns, fields, mode = "and") => {
+const buildFieldMatchClauses = (patterns, fields) => {
   if (!patterns.length) return {};
 
   const clauses = patterns.map((pattern) => ({
@@ -13,7 +13,7 @@ const buildFieldMatchClauses = (patterns, fields, mode = "and") => {
     })),
   }));
 
-  return mode === "or" ? { $or: clauses } : { $and: clauses };
+  return { $and: clauses };
 };
 
 export class SearchRepository {
@@ -23,7 +23,7 @@ export class SearchRepository {
    * @param {number} limit
    */
   async findMatching(patterns, limit) {
-    return ProductModel.find(buildFieldMatchClauses(patterns, ["title", "category"], "and"))
+    return ProductModel.find(buildFieldMatchClauses(patterns, ["title", "category"]))
       .select("_id title category")
       .limit(limit)
       .lean()
@@ -60,7 +60,7 @@ export class SearchRepository {
         },
       },
       { $unwind: "$product" },
-      { $match: buildFieldMatchClauses(patterns, ["product.title", "product.category"], "and") },
+      { $match: buildFieldMatchClauses(patterns, ["product.title", "product.category"]) },
       { $limit: limit },
       { $project: { "product._id": 1, "product.title": 1, "product.category": 1 } },
     ]);

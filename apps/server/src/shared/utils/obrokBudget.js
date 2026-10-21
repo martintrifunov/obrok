@@ -100,4 +100,4 @@ export const calculateWeeklyBudget = (referenceDate, holidays = []) => {
   };
 };
 
-export { DAILY_ALLOWANCE, FULL_WEEK_BUDGET };
+export { DAILY_ALLOWANCE, FULL_WEEK_BUDGET, getMondayOfWeek, getSaturdayOfWeek };

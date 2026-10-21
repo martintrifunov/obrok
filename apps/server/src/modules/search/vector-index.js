@@ -34,15 +34,10 @@ export class VectorIndex {
     this.scales = new Float32Array(0);
     this.version = null;
     this.loading = null;
-    this.timer = null;
   }
 
   isReady() {
     return this.ids.length > 0;
-  }
-
-  get size() {
-    return this.ids.length;
   }
 
   /** Loads every embedding; concurrent calls share one load. */
@@ -116,22 +111,16 @@ export class VectorIndex {
   }
 
   startAutoRefresh(intervalMs = REFRESH_INTERVAL_MS) {
-    this.timer = setInterval(() => this.refreshIfStale(), intervalMs);
-    this.timer.unref?.();
-  }
-
-  stopAutoRefresh() {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+    setInterval(() => this.refreshIfStale(), intervalMs).unref?.();
   }
 
   /**
    * @param {number[]} queryVector
-   * @param {{ k?: number, productIds?: Iterable<unknown> | null, minScore?: number }} [options]
+   * @param {{ k?: number, productIds?: Iterable<unknown> | null }} [options]
    *   productIds limits the search to those products (e.g. one market's catalogue).
    * @returns {{ productId: string, score: number }[]} best first, cosine similarity
    */
-  search(queryVector, { k = 100, productIds = null, minScore = -1 } = {}) {
+  search(queryVector, { k = 100, productIds = null } = {}) {
     if (!this.isReady() || queryVector.length !== this.dims) return [];
 
     const query = normalize(queryVector);
@@ -159,7 +148,6 @@ export class VectorIndex {
       let dot = 0;
       for (let i = 0; i < dims; i++) dot += query[i] * vectors[offset + i];
       const score = dot * scales[row];
-      if (score < minScore) continue;
       if (best.length < k) {
         best.push({ row, score });
         if (best.length === k) best.sort((a, b) => a.score - b.score);

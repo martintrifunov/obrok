@@ -175,7 +175,6 @@ export const buildBilingualTokenRegexes = (text) => {
   if (!text) return [];
   return text
     .split(/\s+/)
-    .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => buildBilingualRegex(token))
     .filter(Boolean);

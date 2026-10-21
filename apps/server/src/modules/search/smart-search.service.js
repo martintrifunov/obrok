@@ -1,5 +1,5 @@
 import { haversineDistance } from "../../shared/utils/haversine.js";
-import { calculateWeeklyBudget } from "../../shared/utils/obrokBudget.js";
+import { calculateWeeklyBudget, getMondayOfWeek, getSaturdayOfWeek } from "../../shared/utils/obrokBudget.js";
 import { buildWordStartMatcher } from "../../shared/utils/bilingualRegex.js";
 import { parsePackSize } from "../../shared/utils/packSize.js";
 import {
@@ -63,6 +63,7 @@ export const cheapestSensiblePack = (options, usual) => {
   if (unknown.length) return cheapest(unknown, (o) => o.price);
   return cheapest(options, (o) => o.price);
 };
+
 // Stores of one chain usually share a pricelist; show a few, not twenty.
 const MAX_MARKETS_PER_CHAIN = 3;
 
@@ -102,17 +103,7 @@ export class SmartSearchService {
   }
 
   async getBudget() {
-    const budget = await this.#computeBudget();
-    return {
-      data: {
-        weeklyBudget: budget.weeklyBudget,
-        budgetInfo: {
-          workDays: budget.budgetInfo.workDays,
-          holidays: budget.budgetInfo.holidays,
-          segments: budget.budgetInfo.segments,
-        },
-      },
-    };
+    return { data: await this.#computeBudget() };
   }
 
   async search({ q, lat, lon, budgetOnly, analytics = null }) {
@@ -139,86 +130,61 @@ export class SmartSearchService {
       return { data: null, redirect: true, intent };
     }
 
-    const ingredients = await Promise.all(
-      intent.products.map((name) => this.findIngredient(name)),
-    );
+    const [ingredients, budget] = await Promise.all([
+      Promise.all(intent.products.map((name) => this.findIngredient(name))),
+      this.#computeBudget(),
+    ]);
+    const { weeklyBudget } = budget;
 
-    // Build a shopping list with match status: found means some market sells it.
+    // Found means some market sells it.
     const shoppingList = ingredients.map(({ name, offers }) => ({
       name,
       found: offers.size > 0,
     }));
 
-    // Structure: Map<marketId, { market, products: Map<productName, { product, price }> }>
-    const marketMap = new Map();
+    /** @type {Map<string, { market: any, products: any[] }>} */
+    const byMarket = new Map();
     for (const { name, offers } of ingredients) {
-      for (const [mid, offer] of offers) {
-        if (!marketMap.has(mid)) {
-          marketMap.set(mid, { market: offer.market, products: new Map() });
-        }
-        marketMap.get(mid).products.set(name, {
-          product: offer.product,
-          price: offer.price,
+      for (const [mid, { market, product, price }] of offers) {
+        if (!byMarket.has(mid)) byMarket.set(mid, { market, products: [] });
+        byMarket.get(mid).products.push({
+          name,
+          title: product?.title || name,
+          price,
+          image: product?.image || null,
         });
       }
     }
 
-    const hasUserLocation =
-      lat !== undefined && lat !== null && lon !== undefined && lon !== null;
+    const hasUserLocation = lat != null && lon != null;
+    const totalProducts = intent.products.length;
 
-    // Score and rank markets
-    const rankedMarkets = Array.from(marketMap.values()).map((entry) => {
-      const matchCount = entry.products.size;
-      const totalProducts = intent.products.length;
-      const complete = matchCount === totalProducts;
-
-      let totalPrice = 0;
-      const productDetails = [];
-      for (const [name, info] of entry.products) {
-        totalPrice += info.price;
-        productDetails.push({
-          name,
-          title: info.product?.title || name,
-          price: info.price,
-          image: info.product?.image || null,
-        });
+    const rankedMarkets = [...byMarket.values()].map(({ market, products }) => {
+      let runningTotal = 0;
+      for (const p of products) {
+        runningTotal += p.price;
+        p.overflow = runningTotal > weeklyBudget;
       }
+      const totalPrice = Math.round(runningTotal);
 
       let distance = null;
-      if (hasUserLocation && entry.market.location?.length === 2) {
-        const [mLat, mLon] = entry.market.location;
+      if (hasUserLocation && market.location?.length === 2) {
+        const [mLat, mLon] = market.location;
         distance = Math.round(haversineDistance(lat, lon, mLat, mLon));
       }
 
       return {
-        market: entry.market,
-        matchCount,
+        market,
+        matchCount: products.length,
         totalProducts,
-        complete,
-        totalPrice: Math.round(totalPrice),
+        complete: products.length === totalProducts,
+        totalPrice,
         distance,
-        products: productDetails,
-        // Set below once the weekly budget is known.
-        withinBudget: false,
-        overBudgetAmount: 0,
+        products,
+        withinBudget: totalPrice <= weeklyBudget,
+        overBudgetAmount: Math.max(0, totalPrice - weeklyBudget),
       };
     });
-
-    const { weeklyBudget, budgetInfo } = await this.#computeBudget();
-
-    // Add budget fields to each market
-    for (const m of rankedMarkets) {
-      m.withinBudget = m.totalPrice <= weeklyBudget;
-      m.overBudgetAmount = m.totalPrice > weeklyBudget
-        ? m.totalPrice - weeklyBudget
-        : 0;
-
-      let runningTotal = 0;
-      for (const p of m.products) {
-        runningTotal += p.price;
-        p.overflow = runningTotal > weeklyBudget;
-      }
-    }
 
     // Sort: complete first → within-budget first → matchCount → distance → price
     rankedMarkets.sort((a, b) => {
@@ -248,12 +214,7 @@ export class SmartSearchService {
         nearestMarket: nearestComplete || null,
         query: q,
         priceSort: intent.priceSort || "asc",
-        weeklyBudget,
-        budgetInfo: {
-          workDays: budgetInfo.workDays,
-          holidays: budgetInfo.holidays,
-          segments: budgetInfo.segments,
-        },
+        ...budget,
       },
     };
   }
@@ -306,7 +267,7 @@ export class SmartSearchService {
   }
 
   async #ingredientCandidates(name) {
-    const byVector = await this.searchService.findIngredientCandidates?.(name);
+    const byVector = await this.searchService.findIngredientCandidates(name);
     if (byVector) return { results: byVector, strict: true, scored: true };
 
     // No vector index: word matches over the hybrid results.
@@ -314,30 +275,17 @@ export class SmartSearchService {
     return { ...pickIngredientCandidates(name, result.data), scored: false };
   }
 
-  #getMondayOfWeek(date) {
-    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const dow = d.getDay() === 0 ? 7 : d.getDay();
-    d.setDate(d.getDate() - (dow - 1));
-    return d;
-  }
-
   async #computeBudget() {
     const today = todayInAppTimeZone();
-    const monday = this.#getMondayOfWeek(today);
-    const saturday = new Date(monday);
-    saturday.setDate(saturday.getDate() + 5);
 
     let holidayDates = [];
     if (this.publicHolidayService) {
-      const { from, to } = utcRangeForCalendarDays(monday, saturday);
+      const { from, to } = utcRangeForCalendarDays(getMondayOfWeek(today), getSaturdayOfWeek(today));
       const holidays = await this.publicHolidayService.getHolidaysByDateRange(from, to);
       holidayDates = holidays.map((h) => utcDateToLocalCalendarDate(new Date(h.date)));
     }
 
-    const budgetInfo = calculateWeeklyBudget(today, holidayDates);
-    return {
-      weeklyBudget: budgetInfo.budget,
-      budgetInfo,
-    };
+    const { budget, workDays, holidays, segments } = calculateWeeklyBudget(today, holidayDates);
+    return { weeklyBudget: budget, budgetInfo: { workDays, holidays, segments } };
   }
 }

@@ -32,7 +32,7 @@ describe("SmartSearchService", () => {
       }),
     };
     searchService = {
-      search: vi.fn(),
+      findIngredientCandidates: vi.fn(async () => null),
       searchProducts: vi.fn(async ({ q }) => ({
         data: [makeResult(q === "брашно" ? "Брашно 1кг" : "Млеко 1л", q === "брашно" ? 60 : 70)],
       })),
@@ -51,7 +51,7 @@ describe("SmartSearchService", () => {
   it("searches ingredients without the ai-search gate or a second intent parse", async () => {
     const result = await sut.search({ q: "палачинки" });
 
-    expect(searchService.search).not.toHaveBeenCalled();
+    expect(searchService.findIngredientCandidates).toHaveBeenCalledTimes(2);
     expect(searchService.searchProducts).toHaveBeenCalledTimes(2);
     expect(intentParserService.parseIntent).toHaveBeenCalledTimes(1);
     expect(result.data.shoppingList).toEqual([

@@ -99,7 +99,7 @@ export class SearchService {
       this.vectorIndex.load().catch((err) => console.error("[VectorIndex] Load failed:", err.message));
       return null;
     }
-    return this.embeddingService.generateEmbedding(embeddingText, "RETRIEVAL_QUERY");
+    return this.embeddingService.generateEmbedding(embeddingText);
   }
 
   /** Nearest products across the catalogue that are still sold somewhere. */
@@ -175,7 +175,7 @@ export class SearchService {
     return sortStrongByPrice(results, sortKey, (r) => isVariant(titles.get(r.productId)));
   }
 
-  async #hydrateResults(results, marketId, priceSort = null) {
+  async #hydrateResults(results, marketId, priceSort) {
     if (!results.length) return [];
 
     const { products, marketProducts } = await this.searchRepository.findForDisplay(

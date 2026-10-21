@@ -41,13 +41,13 @@ describe("SearchService", () => {
     expect(embeddingService.generateEmbedding).not.toHaveBeenCalled();
   });
 
-  it("calls vector search with RETRIEVAL_QUERY task type", async () => {
+  it("embeds the query for vector search", async () => {
     featureFlagService.isEnabled.mockResolvedValue(true);
     embeddingService.generateEmbedding.mockResolvedValue(new Array(768).fill(0));
 
     await service.search({ q: "леб", page: 1, limit: 10 });
 
-    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("леб", "RETRIEVAL_QUERY");
+    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("леб");
   });
 
   it("embeds Latin queries in Cyrillic", async () => {
@@ -56,7 +56,7 @@ describe("SearchService", () => {
 
     await service.search({ q: "najeftin kaskaval", page: 1, limit: 10 });
 
-    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("каскавал", "RETRIEVAL_QUERY");
+    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("каскавал");
   });
 
   it("starts loading the index and answers keyword-only while it isn't ready", async () => {

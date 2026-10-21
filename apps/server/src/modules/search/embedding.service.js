@@ -24,9 +24,9 @@ export class EmbeddingService {
     return this.client !== null;
   }
 
-  async generateEmbedding(text, taskType = "RETRIEVAL_DOCUMENT") {
+  /** Embeds a search query; repeated queries come from the cache. */
+  async generateEmbedding(text) {
     if (!this.client) throw new Error("GEMINI_API_KEY not configured.");
-    if (taskType !== "RETRIEVAL_QUERY") return this.#embedWithRetry(text, taskType);
 
     const key = text.trim().toLowerCase();
     const cached = this.queryCache.get(key);
@@ -36,7 +36,7 @@ export class EmbeddingService {
       this.queryCache.set(key, cached);
       return cached;
     }
-    const embedding = await this.#embedWithRetry(text, taskType);
+    const embedding = await this.#embedWithRetry(`task: search result | query: ${text}`);
     this.queryCache.set(key, embedding);
     if (this.queryCache.size > QUERY_CACHE_SIZE) {
       this.queryCache.delete(this.queryCache.keys().next().value);
@@ -44,15 +44,8 @@ export class EmbeddingService {
     return embedding;
   }
 
-  #formatForTaskType(text, taskType) {
-    if (taskType === "RETRIEVAL_QUERY") {
-      return `task: search result | query: ${text}`;
-    }
-    return `title: ${text} | text: ${text}`;
-  }
-
-  async #embedWithRetry(text, taskType, maxRetries = 8) {
-    const prompt = this.#formatForTaskType(text, taskType);
+  // Queries and documents are worded differently, as Gemini's retrieval tuning expects.
+  async #embedWithRetry(prompt, maxRetries = 8) {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const result = await this.client.models.embedContent({
@@ -73,14 +66,15 @@ export class EmbeddingService {
     }
   }
 
-  async generateBatchEmbeddings(texts, taskType = "RETRIEVAL_DOCUMENT") {
+  /** Embeds product texts as documents. */
+  async generateBatchEmbeddings(texts) {
     if (!this.client) throw new Error("GEMINI_API_KEY not configured.");
 
     const results = [];
     for (let i = 0; i < texts.length; i += CHUNK_SIZE) {
       const batch = texts.slice(i, i + CHUNK_SIZE);
       const embeddings = await Promise.all(
-        batch.map((text) => this.#embedWithRetry(text, taskType)),
+        batch.map((text) => this.#embedWithRetry(`title: ${text} | text: ${text}`)),
       );
 
       results.push(...embeddings);
