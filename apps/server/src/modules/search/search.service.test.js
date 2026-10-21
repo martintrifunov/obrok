@@ -8,6 +8,7 @@ const emptyRepository = () => ({
   findMarketProductIds: vi.fn().mockResolvedValue([]),
   keepPriced: vi.fn(async (ids) => ids.map(String)),
   findPriceRanges: vi.fn().mockResolvedValue(new Map()),
+  findTitles: vi.fn().mockResolvedValue(new Map()),
   findForDisplay: vi.fn().mockResolvedValue({ products: [], marketProducts: [] }),
 });
 

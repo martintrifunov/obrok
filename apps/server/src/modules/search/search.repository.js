@@ -107,6 +107,16 @@ export class SearchRepository {
   }
 
   /**
+   * @param {string[]} productIds
+   * @returns {Promise<Map<string, string>>} title by product id
+   */
+  async findTitles(productIds) {
+    if (!productIds.length) return new Map();
+    const products = await ProductModel.find({ _id: { $in: productIds.map(toObjectId) } }, { title: 1 }).lean().exec();
+    return new Map(products.map((p) => [String(p._id), p.title || ""]));
+  }
+
+  /**
    * Products with images, and their price rows with market, chain and chain image.
    * @param {string[]} productIds
    * @param {string} [marketId]

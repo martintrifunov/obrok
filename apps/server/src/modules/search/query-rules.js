@@ -37,6 +37,39 @@ export const parseSearchQuery = (query) => {
   return { searchTerms, embeddingText, priceSort };
 };
 
+// Variants that are a different product than the plain one, by the product the
+// query names: chocolate milk or coffee creamer isn't what "cheapest milk" means.
+// Matched on the Cyrillic spelling; "^" is Č in one chain's titles.
+const VARIANTS = [
+  {
+    product: /(?<!\p{L})млек/u,
+    variants: ["(?<!\\p{L})[ч^]ок(?:о|(?!\\p{L}))", "какао", "ванил", "јагод", "банан", "лешник", "шејк", "за кафе"],
+  },
+];
+
+/**
+ * Whether a title is a variant of what the query names (chocolate milk for
+ * milk) or an accessory for it ("БОЈА ЗА ЈАЈЦА" for eggs). Variants the query
+ * asks for ("чоколадно млеко") don't count.
+ * @param {string} searchTerms
+ * @returns {(title: string) => boolean}
+ */
+export const buildVariantMatcher = (searchTerms) => {
+  const query = transliterateLatinToCyrillic(searchTerms);
+  const variants = VARIANTS.filter((v) => v.product.test(query))
+    .flatMap((v) => v.variants)
+    .filter((v) => !new RegExp(v, "u").test(query));
+  // "масло за готвење" names a purpose itself; "за готвење" in a title is no accessory then.
+  const words = query
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\p{L}]/gu, ""))
+    .filter((w, i, all) => w.length >= 3 && all[i - 1] !== "за");
+  const parts = [...variants, ...words.map((w) => `(?<!\\p{L})за ${w}`)];
+  if (!parts.length) return () => false;
+  const variant = new RegExp(parts.join("|"), "u");
+  return (title) => variant.test(transliterateLatinToCyrillic(title || ""));
+};
+
 /**
  * Cache key shared by Latin and Cyrillic spellings of the same meal.
  * @param {string} query

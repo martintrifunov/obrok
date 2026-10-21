@@ -21,6 +21,7 @@ const repository = () => ({
   findMarketProductIds: vi.fn(async () => []),
   keepPriced: vi.fn(async (ids) => ids.map(String).filter((id) => pricedIds.has(id))),
   findPriceRanges: vi.fn(async () => new Map()),
+  findTitles: vi.fn(async () => new Map()),
   findForDisplay: vi.fn(async (ids) => ({
     products: products.filter((p) => ids.includes(p._id)),
     marketProducts: priceRows.filter((r) => ids.includes(r.product)),

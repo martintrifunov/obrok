@@ -1,6 +1,6 @@
 import { buildBilingualRegex, buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
 import { buildPaginationMeta } from "../../shared/utils/buildPaginationMeta.js";
-import { parseSearchQuery } from "./query-rules.js";
+import { parseSearchQuery, buildVariantMatcher } from "./query-rules.js";
 import { buildKeywordScorer, fuseResults, sortStrongByPrice } from "./hybrid-ranker.js";
 
 const KEYWORD_LIMIT = 100;
@@ -63,7 +63,7 @@ export class SearchService {
       : [];
 
     let merged = fuseResults(vectorResults, keywordResults);
-    if (priceSort) merged = await this.#sortByPrice(merged, marketId, priceSort);
+    if (priceSort) merged = await this.#sortByPrice(merged, marketId, priceSort, searchTerms);
 
     const total = merged.length;
     const skip = (page - 1) * limit;
@@ -158,19 +158,21 @@ export class SearchService {
       .map(({ productId, score: s }) => ({ productId, score: s }));
   }
 
-  async #sortByPrice(results, marketId, priceSort) {
+  async #sortByPrice(results, marketId, priceSort, searchTerms) {
     if (!results.length) return results;
-    const prices = await this.searchRepository.findPriceRanges(
-      results.map((r) => r.productId),
-      marketId,
-    );
+    const ids = results.map((r) => r.productId);
+    const [prices, titles] = await Promise.all([
+      this.searchRepository.findPriceRanges(ids, marketId),
+      this.searchRepository.findTitles(ids),
+    ]);
     /** @param {{ productId: string, score: number }} result */
     const sortKey = (result) => {
       const p = prices.get(result.productId);
       if (!p) return Infinity;
       return priceSort === "asc" ? p.min : -p.max;
     };
-    return sortStrongByPrice(results, sortKey);
+    const isVariant = buildVariantMatcher(searchTerms);
+    return sortStrongByPrice(results, sortKey, (r) => isVariant(titles.get(r.productId)));
   }
 
   async #hydrateResults(results, marketId, priceSort = null) {

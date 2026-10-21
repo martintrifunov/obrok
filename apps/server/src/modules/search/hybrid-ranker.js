@@ -55,16 +55,18 @@ export const fuseResults = (vectorHits, keywordHits) => {
 
 /**
  * Sorts strong matches by price and keeps weaker ones after them, so "cheapest
- * milk" isn't led by a chocolate bar that mentions milk.
+ * milk" isn't led by a chocolate bar that mentions milk. Variants and accessories
+ * (chocolate milk, egg dye) join the weaker ones too.
  * @template {{ score: number }} T
  * @param {T[]} results best first
  * @param {(result: T) => number} priceKey lower comes first
+ * @param {(result: T) => boolean} [isVariant]
  * @returns {T[]}
  */
-export const sortStrongByPrice = (results, priceKey) => {
+export const sortStrongByPrice = (results, priceKey, isVariant = () => false) => {
   if (!results.length) return results;
   const threshold = results[0].score * STRONG_SHARE;
-  const strong = results.filter((r) => r.score >= threshold);
-  const weak = results.filter((r) => r.score < threshold);
-  return [...strong.sort((a, b) => priceKey(a) - priceKey(b)), ...weak];
+  const strong = results.filter((r) => r.score >= threshold && !isVariant(r));
+  const rest = results.filter((r) => !strong.includes(r));
+  return [...strong.sort((a, b) => priceKey(a) - priceKey(b)), ...rest];
 };

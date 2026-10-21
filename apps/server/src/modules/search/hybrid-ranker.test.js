@@ -51,4 +51,19 @@ describe("sortStrongByPrice", () => {
 
     expect(sorted.map((r) => r.id)).toEqual(["milk 45", "milk 60", "choco bar 20"]);
   });
+
+  it("puts variants after the plain strong matches, in relevance order", () => {
+    const results = [
+      { id: "milk 45", score: 1, price: 45 },
+      { id: "chocolate milk 21", score: 0.9, price: 21 },
+      { id: "milk 29", score: 0.85, price: 29 },
+      { id: "creamer 32", score: 0.84, price: 32 },
+      { id: "choco bar 20", score: 0.4, price: 20 },
+    ];
+    const isVariant = (r) => r.id.startsWith("chocolate milk") || r.id.startsWith("creamer");
+
+    const sorted = sortStrongByPrice(results, (r) => r.price, isVariant);
+
+    expect(sorted.map((r) => r.id)).toEqual(["milk 29", "milk 45", "chocolate milk 21", "creamer 32", "choco bar 20"]);
+  });
 });
