@@ -37,10 +37,11 @@ const registerShutdown = (server, cronTasks) => {
 };
 
 const prepareVectorIndex = async () => {
+  // Refresh even if the startup load fails; a later search loads it lazily.
+  vectorIndex.startAutoRefresh();
   const packed = await productEmbeddingRepository.packLegacyEmbeddings();
   if (packed) console.log(`[VectorIndex] Packed ${packed} legacy embeddings.`);
   if (await featureFlagService.isEnabled("ai-search")) await vectorIndex.load();
-  vectorIndex.startAutoRefresh();
 };
 
 const start = async () => {
