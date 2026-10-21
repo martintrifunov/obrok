@@ -48,6 +48,8 @@ The three GET routes share `analyticsDaysQuerySchema`: optional `days`, integer 
 | Hybrid search while `ai-search` is on | `feature_usage` event, `feature: "hybrid-search"` |
 | Smart search while `smart-search` is on | `feature_usage` event, `feature: "smart-search"` |
 
+Admins are left out: when the request carries an admin's token (`optionalVerifyJWT` sets `req.role`), heartbeats answer `{ ok: true }` without writing anything and searches record no usage. An admin browsing without logging in still counts as a visitor.
+
 The client (`useVisitorHeartbeat`) sends `isPageView: true` when the route changes and `false` for the 60-second keepalive and when the tab becomes visible again.
 
 ### Data Models

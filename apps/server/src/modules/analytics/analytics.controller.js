@@ -4,6 +4,9 @@ export class AnalyticsController {
   }
 
   heartbeat = async (req, res) => {
+    // Admins' own visits would skew the insights they read.
+    if (req.role === "admin") return res.status(200).json({ ok: true });
+
     const result = await this.analyticsService.trackHeartbeat({
       visitorId: req.visitorId,
       userId: req.user || null,

@@ -12,6 +12,7 @@ const optionalVerifyJWT = (req, res, next) => {
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (!err && decoded?.UserInfo) {
       req.user = decoded.UserInfo.username;
+      req.role = decoded.UserInfo.role;
     }
     next();
   });

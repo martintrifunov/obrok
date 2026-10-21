@@ -94,6 +94,6 @@ Other open tabs keep their flags until reload.
 
 ## Risks and Trade-offs
 
-- The heartbeat interval runs on every page, including the dashboard, so admin activity shows up in visitor stats.
+- The heartbeat runs on every page, including the dashboard. The server ignores heartbeats and searches from logged-in admins, but an admin who isn't logged in counts as a visitor.
 - Report progress is not persisted; a refresh during generation leaves the job running on the server with no way to download it from the UI.
 - Flags are fetched once per page load, so turning a flag off does not reach users who already have the app open.
