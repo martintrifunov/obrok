@@ -145,8 +145,8 @@ export class KamScraper extends BaseScraper {
           if (current) products.push(this.#finishProduct(current));
           current = { ...cells, y: row[0].y };
         } else if (current && current.y - row[0].y <= CONTINUATION_MAX_GAP) {
-          current.titleParts.push(cells.title);
-          current.categoryParts.push(cells.category);
+          current.titleParts.push(...cells.titleParts);
+          current.categoryParts.push(...cells.categoryParts);
         } else if (current) {
           products.push(this.#finishProduct(current));
           current = null;
@@ -215,12 +215,9 @@ export class KamScraper extends BaseScraper {
         .join(" ")
         .trim();
 
-    const title = collect("title");
     return {
-      title,
-      titleParts: [title],
+      titleParts: [collect("title")],
       categoryParts: [collect("category")],
-      category: collect("category"),
       price: parsePrice(collect("price")),
       // The column runs to the page edge and also picks up the promo price
       // columns, so only its first word is the "Да"/"Не" answer.
