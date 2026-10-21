@@ -69,6 +69,17 @@ describe("SearchService", () => {
     expect(embeddingService.generateEmbedding).not.toHaveBeenCalled();
   });
 
+  it("answers keyword-only when the query embedding fails", async () => {
+    featureFlagService.isEnabled.mockResolvedValue(true);
+    embeddingService.generateEmbedding.mockRejectedValue(new Error("503 UNAVAILABLE"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await service.search({ q: "леб", page: 1, limit: 10 });
+
+    expect(result.data).toEqual([]);
+    expect(vectorIndex.search).not.toHaveBeenCalled();
+  });
+
   it("falls back to keyword-only when embeddings unavailable", async () => {
     featureFlagService.isEnabled.mockResolvedValue(true);
     embeddingService.isAvailable.mockReturnValue(false);

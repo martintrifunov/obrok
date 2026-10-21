@@ -99,7 +99,13 @@ export class SearchService {
       this.vectorIndex.load().catch((err) => console.error("[VectorIndex] Load failed:", err.message));
       return null;
     }
-    return this.embeddingService.generateEmbedding(embeddingText);
+    try {
+      return await this.embeddingService.generateEmbedding(embeddingText);
+    } catch (err) {
+      // An embedding outage shouldn't take search down: keyword results still work.
+      console.error("[Search] Query embedding failed, searching by keyword only:", err.message);
+      return null;
+    }
   }
 
   /** Nearest products across the catalogue that are still sold somewhere. */

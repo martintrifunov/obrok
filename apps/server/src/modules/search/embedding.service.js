@@ -5,6 +5,8 @@ const MODEL = "gemini-embedding-2";
 const DIMENSIONS = 768;
 const CHUNK_SIZE = 20;
 const QUERY_CACHE_SIZE = 2000;
+// A search waits on its query embedding; on failure it falls back to keywords, so retry once, quickly.
+const QUERY_RETRIES = 1;
 const MAX_RETRY_DELAY_MS = 60_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -36,7 +38,7 @@ export class EmbeddingService {
       this.queryCache.set(key, cached);
       return cached;
     }
-    const embedding = await this.#embedWithRetry(`task: search result | query: ${text}`);
+    const embedding = await this.#embedWithRetry(`task: search result | query: ${text}`, QUERY_RETRIES);
     this.queryCache.set(key, embedding);
     if (this.queryCache.size > QUERY_CACHE_SIZE) {
       this.queryCache.delete(this.queryCache.keys().next().value);

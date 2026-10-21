@@ -120,7 +120,7 @@ flowchart TD
 - **Formats**: queries are always embedded as `task: search result | query: <text>` (`generateEmbedding`); product texts as `title: <text> | text: <text>` (`generateBatchEmbeddings`). There is no `taskType` parameter.
 - **Query cache**: 2000 entries, least recently used evicted, keyed by the trimmed lower-case text. Repeated searches and common meal ingredients don't call the API again.
 - **Batches**: 20 texts embedded in parallel, then a 350 ms pause.
-- **Retries**: up to 8 on transient errors (HTTP 429/5xx, `RESOURCE_EXHAUSTED`, `UNAVAILABLE`, network errors such as timeouts, DNS failures and connection resets). The delay is the server's "retry in Ns" hint or exponential backoff from 2 s with jitter, capped at 60 s (30 s in the intent parser).
+- **Retries**: a search's query embedding is retried once; product embeddings in the sync up to 8 times. Both only retry transient errors (HTTP 429/5xx, `RESOURCE_EXHAUSTED`, `UNAVAILABLE`, network errors such as timeouts, DNS failures and connection resets). The delay is the server's "retry in Ns" hint or exponential backoff from 2 s with jitter, capped at 60 s (30 s in the intent parser).
 
 ### Embedding Sync
 
@@ -174,7 +174,7 @@ Embeddings are stored as packed little-endian float32 bytes (3 KB each) instead 
 | Situation | Behavior |
 |-----------|----------|
 | No `GEMINI_API_KEY` | Product search is keyword-only; meal search returns "AI service is not configured." |
-| Embedding API errors during a search | Transient errors are retried up to 8 times (waits up to 60 s each), then the request fails; there is no keyword-only fallback for a failing API |
+| Embedding API errors during a search | One quick retry, then the search continues keyword-only (meal ingredients use the keyword fallback) and the error is logged |
 | Meal decomposition fails (after retries on both models) | `redirect: true`; the failure is not cached |
 | Vector index not loaded yet | Keyword-only results until the load finishes |
 | Embedding sync fails | New or changed products are found by keyword only until the next sync |
