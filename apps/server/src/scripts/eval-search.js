@@ -1,12 +1,5 @@
-import { config } from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
+import "./load-env.js";
 import fs from "fs";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
-
 import mongoose from "mongoose";
 import { EmbeddingService } from "../modules/search/embedding.service.js";
 import { IntentParserService } from "../modules/search/intent-parser.service.js";

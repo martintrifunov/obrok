@@ -14,11 +14,10 @@
  *   node src/scripts/populate-coordinates.js vero     # only Vero
  *   node src/scripts/populate-coordinates.js --force  # re-geocode everything
  */
-import { fileURLToPath } from "url";
+import "./load-env.js";
 import path from "path";
 import fs from "fs";
 import puppeteer from "puppeteer";
-import { config } from "dotenv";
 
 import {
   createScraper,
@@ -26,11 +25,7 @@ import {
 } from "../modules/scraper/scraper.registry.js";
 import { normalizeMarketName } from "../modules/scraper/normalize-market-name.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
-
-const COORDS_PATH = path.resolve(__dirname, "../data/market-coordinates.json");
+const COORDS_PATH = path.resolve(import.meta.dirname, "../data/market-coordinates.json");
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY?.trim();

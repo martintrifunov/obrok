@@ -1,11 +1,4 @@
-import { config } from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
-
+import "./load-env.js";
 import mongoose from "mongoose";
 import { ChainRepository } from "../modules/chain/chain.repository.js";
 import { ProductRepository } from "../modules/product/product.repository.js";

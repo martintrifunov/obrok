@@ -1,11 +1,5 @@
-import { config } from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
+import "./load-env.js";
 import mongoose from "mongoose";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
 import { EmbeddingService } from "../modules/search/embedding.service.js";
 import { ProductEmbeddingRepository } from "../modules/search/product-embedding.repository.js";
 import { syncProductEmbeddings } from "../modules/search/product-embedding-sync.service.js";
