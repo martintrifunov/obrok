@@ -87,7 +87,7 @@ After that, `certbot` renews and `nginx` reloads on their 12-hour loops; no cron
 
 `.github/workflows/deploy.yml` runs when a GitHub release is published. Tags follow calendar versioning, for example `v2026.03.13.1`.
 
-1. **test** (Node 24): in `apps/server`, `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`; in `apps/client`, `npm ci`, `npm run lint`, `npm test`.
+1. **test**: runs `.github/workflows/ci.yml`, the same checks every pull request gets (server lint, typecheck and tests; client lint, tests and build, on Node 24). A failure stops the release before anything touches the VPS.
 2. **deploy** (after test): SSH to the VPS with `appleboy/ssh-action` using secrets `VPS_HOST`, `VPS_USERNAME`, `VPS_SSH_KEY`, `VPS_PASSPHRASE`. The checkout path is the `VPS_APP_DIR` repository variable, defaulting to `/home/maco/projects/obrok`. On the VPS it:
    1. Loads `nvm` (the docs build runs with the host's Node).
    2. `git fetch --tags --force` and `git checkout -f <tag>`.

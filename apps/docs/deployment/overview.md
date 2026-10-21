@@ -44,7 +44,8 @@ Both environments read the same two files, documented in [ENV_TEMPLATES.md](http
 
 | Workflow | Trigger | What it does |
 | --- | --- | --- |
-| `deploy.yml` | Release published | Server and client lint and tests, then SSH deploy to the VPS. See [Release Pipeline](/deployment/prod-environment#release-pipeline). |
+| `ci.yml` | Every pull request, every push to `develop`, and called by `deploy.yml` | Server: lint, typecheck, tests. Client: lint, tests, production build. Make its jobs required checks on `main` so a red PR can't merge. |
+| `deploy.yml` | Release published | Runs `ci.yml`, then the SSH deploy to the VPS. See [Release Pipeline](/deployment/prod-environment#release-pipeline). |
 | `docs-ci.yml` | Pull request touching `apps/docs/**` or the workflow file | `npm ci` and `npm run docs:build` in `apps/docs` |
 | `gitlab-sync.yml` | Manual (`workflow_dispatch`) only | Force-pushes `origin/main` to the FINKI GitLab mirror. Automatic triggers are commented out. |
 
@@ -55,6 +56,7 @@ Both environments read the same two files, documented in [ENV_TEMPLATES.md](http
 | `docker-compose.dev.yml` | Development services, ports, volumes |
 | `docker-compose.prod.yml` | Production services, restart policies, volumes |
 | `ENV_TEMPLATES.md` | Root and client environment variables |
+| `.github/workflows/ci.yml` | Code checks on pull requests, `develop` pushes and releases |
 | `.github/workflows/deploy.yml` | Release deployment |
 | `.github/workflows/docs-ci.yml` | Docs build check on pull requests |
 | `.github/workflows/gitlab-sync.yml` | Manual GitLab mirror push |

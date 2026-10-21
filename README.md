@@ -4,6 +4,8 @@ Obrok is an open source web application that scrapes product prices from market 
 
 Users can search ingredients across chains, let AI turn a meal into an ingredient list priced at real markets, and see the markets on a map with routes. Admins get a dashboard for managing data, reports, insights and feature flags. It is built with a React frontend, an Express and MongoDB backend, self-hosted OSRM routing, and a VitePress documentation site.
 
+[![CI](https://github.com/martintrifunov/obrok/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/martintrifunov/obrok/actions/workflows/ci.yml)
+
 [Documentation](https://docs.obrok.net) | [Website](https://obrok.net) | [Environment Templates](./ENV_TEMPLATES.md) | [License](./LICENSE)
 
 ## Repository Layout
