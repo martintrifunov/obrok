@@ -39,7 +39,7 @@ describe("getClusterGradient", () => {
 
 describe("getMarkerColor", () => {
   it("matches chain names loosely", () => {
-    expect(getMarkerColor("Super Kit-Go")).toBe("#0d47a1");
+    expect(getMarkerColor("Stoko-Mak")).toBe("#f4c430");
   });
 
   it("falls back to the Vero color for unknown chains", () => {

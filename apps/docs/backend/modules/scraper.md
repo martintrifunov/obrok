@@ -22,7 +22,6 @@ Automated web scraping pipeline using Puppeteer with concurrent tabs, market dis
 | `ramstore.scraper.js` | Ramstore scraper |
 | `stokomak.scraper.js` | Stokomak scraper |
 | `kam.scraper.js` | KAM scraper |
-| `superkitgo.scraper.js` | SuperKitGo scraper |
 | `utils/` | Shared scraping utilities |
 
 ### Scripts

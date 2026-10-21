@@ -47,7 +47,7 @@ Runbooks define routine operational tasks and incident responses for production.
 The scripts pick their database the same way everywhere: inside a container they use `DATABASE_URI` (the `db` service), and on the host they use `MONGO_URI_LOCAL` (the published port), falling back to whichever is set.
 4. Verify data via API or application UI.
 
-Available chain keys: vero, ramstore, stokomak, kam, superkitgo.
+Available chain keys: vero, ramstore, stokomak, kam.
 
 ## 6. docs.obrok.net Validation
 

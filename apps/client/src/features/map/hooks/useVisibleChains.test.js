@@ -25,8 +25,8 @@ describe("getInitialVisibleChains", () => {
   });
 
   it("canonicalizes stored names and drops unknown chains", () => {
-    store(JSON.stringify(["kam", "SUPER KIT-GO", "Kipper"]));
-    expect(getInitialVisibleChains()).toEqual(new Set(["KAM", "Super Kit-Go"]));
+    store(JSON.stringify(["kam", "RAMSTORE", "Kipper"]));
+    expect(getInitialVisibleChains()).toEqual(new Set(["KAM", "Ramstore"]));
   });
 
   it("falls back to the defaults when no stored chain is known", () => {
