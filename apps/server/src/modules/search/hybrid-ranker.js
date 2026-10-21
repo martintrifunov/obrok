@@ -66,7 +66,8 @@ export const fuseResults = (vectorHits, keywordHits) => {
 export const sortStrongByPrice = (results, priceKey, isVariant = () => false) => {
   if (!results.length) return results;
   const threshold = results[0].score * STRONG_SHARE;
-  const strong = results.filter((r) => r.score >= threshold && !isVariant(r));
-  const rest = results.filter((r) => !strong.includes(r));
+  const strong = [];
+  const rest = [];
+  for (const r of results) (r.score >= threshold && !isVariant(r) ? strong : rest).push(r);
   return [...strong.sort((a, b) => priceKey(a) - priceKey(b)), ...rest];
 };
