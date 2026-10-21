@@ -3,7 +3,7 @@
  *
  * To add a new market, extend this class and implement:
  *   - get chainName()
- *   - get placeholderImageFilename()
+ *   - get chainImageKey()
  *   - get geocodeSuffix()        (optional override)
  *   - async fetchMarkets(page)
  *   - async fetchProducts(page, storeUrl, previousUpdate)
@@ -65,7 +65,7 @@ export class BaseScraper {
    * @returns {string}
    */
   get geocodeSuffix() {
-    return "Скопје, Македонија";
+    return "Македонија";
   }
 
   /**

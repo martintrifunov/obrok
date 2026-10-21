@@ -6,35 +6,33 @@ title: How Obrok Works
 
 ## Public Summary
 
-Obrok ("meal" in Macedonian) helps people in North Macedonia figure out where to shop so that a week of groceries fits inside the statutory daily meal allowance (140 MKD/day, six working days). Everything else in the system exists to make that one question answerable: what can I actually cook this week, where is it cheapest, and can I get there.
+Obrok ("meal" in Macedonian) helps people in North Macedonia find where to shop so that a week of groceries fits inside the statutory daily meal allowance (140 MKD per working day, Monday to Saturday, minus public holidays). Everything else exists to answer one question: what can I cook this week, where is it cheapest, and can I get there.
 
-This section explains the four ideas that make that possible, in plain language, aimed at a reader who wants to understand the system's design without reading source code first:
+The pages in this section explain the design in plain language, for readers who haven't opened the code:
 
-- [Search & Recipe Decomposition](/concepts/search-and-recipes) — how a free-text query (or a whole recipe) turns into ranked, priced results.
-- [Geolocation](/concepts/geolocation) — how scraped store listings become map coordinates, and where that process is known to fail.
-- [Routing & Map](/concepts/routing-and-map) — how the map computes travel routes and renders hundreds of markets without stuttering.
-- [System Architecture](/architecture/overview) — the container/service topology all of the above runs on.
+- [Search & Recipe Decomposition](/concepts/search-and-recipes): how a product query or a whole meal turns into ranked, priced results.
+- [Geolocation](/concepts/geolocation): how scraped store listings become map coordinates, and where that fails.
+- [Routing & Map](/concepts/routing-and-map): how routes are computed and hundreds of stores are drawn.
+- [System Architecture](/architecture/overview) and [Data And Request Flows](/architecture/flows): the services and the main flows all of the above runs on.
 
 ## Internal Details
 
-### Why This Section Exists
-
-The rest of this site (`Backend`, `Frontend`, `Deployment`, `Patterns`) is written as engineering reference documentation: file tables, endpoint lists, source anchors. That's the right shape for a contributor changing code, but the wrong shape for explaining *why* the system is built the way it is. The pages in this section are the opposite: prose first, one diagram, no file tables, each one links down into the matching reference page for anyone who wants implementation detail.
-
 ### The Core Problem
 
-Grocery prices in North Macedonia vary meaningfully between chains and even between branches of the same chain. A shopper deciding what to cook has to mentally cross-reference a recipe against prices at stores they can actually reach. Obrok automates that: scrape prices across chains, let a user describe what they want to eat (a product, or a full recipe), decompose it into a shopping list, price that list at every market that carries it, and rank markets by completeness, budget fit, and distance.
+Grocery prices vary between chains and even between stores of one chain. Deciding what to cook means cross-referencing a recipe against prices at stores you can reach. Obrok automates that: it scrapes prices from four chains (Vero, Ramstore, Stokomak and KAM) twice a week, lets a user describe a product or a meal, turns a meal into a shopping list, prices it at every store that carries it, and ranks stores by completeness, budget fit and distance.
 
-### Reading Order
+### How to Read This Section
 
-If you're presenting this as part of a thesis, a reasonable order is: this page, then Search & Recipe Decomposition (the most novel part), then Geolocation (the most concrete "here's a real problem we found and fixed" material), then Routing & Map, then System Architecture as the technical closing summary.
+These pages explain why; the `Backend`, `Frontend`, `Deployment` and `Patterns` sections are the reference (file tables, endpoints, constants). Each concept page links to its reference page. A good order: this page, Search & Recipe Decomposition (the most novel part), Geolocation (a real problem found and fixed), Routing & Map, then System Architecture as the technical summary.
 
 ## Source Anchors
 
 | Path | Relevance |
 |------|-----------|
-| `apps/server/src/shared/utils/obrokBudget.js` | Statutory daily meal allowance calculation that anchors the whole product |
+| `apps/server/src/shared/utils/obrokBudget.js` | The weekly meal allowance that anchors the product |
+| `apps/server/src/modules/scraper/scraper.registry.js` | The active chains |
+| `apps/server/src/modules/scraper/scraper.cron.js` | Scrape schedule (03:00 Skopje time, Monday and Thursday) |
 
 ## Risks and Trade-offs
 
-- This section intentionally simplifies. Where it disagrees with a reference page on a detail, the reference page (and the source it cites) is authoritative.
+- This section simplifies. Where it disagrees with a reference page, the reference page (and the source it cites) is authoritative.

@@ -40,8 +40,8 @@ SCRAPER_UPDATE_TEXT_WAIT_TIMEOUT_MS=12000
 # PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium-browser"
 
 # --- Scripts Only (optional, not needed for the app itself) ---
-# Used by standalone scripts as an alternative to DATABASE_URI
-MONGO_URI_LOCAL="mongodb://localhost:27017/obrok"
+# Used by npm scripts run on the host (outside Docker); dev publishes MongoDB on port 6969
+MONGO_URI_LOCAL="mongodb://admin:super_secure_password@localhost:6969/obrok?authSource=admin"
 GOOGLE_MAPS_API_KEY="your_google_maps_api_key"
 
 # --- AI / Embeddings (optional, enables AI search) ---

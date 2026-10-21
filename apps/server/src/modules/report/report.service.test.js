@@ -17,7 +17,6 @@ const makeJobRepository = () => {
       jobs.set(job._id, job);
       return { ...job };
     }),
-    findById: vi.fn(async (id) => (jobs.has(id) ? { ...jobs.get(id) } : null)),
     findByIdAndUser: vi.fn(async (id, userId) => {
       const job = jobs.get(id);
       return job && job.requestedBy === userId ? { ...job } : null;

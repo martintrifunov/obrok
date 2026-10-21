@@ -20,7 +20,7 @@ const MapSettingsMenu = ({ visibleChains, onToggleChain }) => {
   const toggleColorMode = useThemeStore((state) => state.toggleColorMode);
   const logout = useLogout();
   const navigate = useNavigate();
-  const { auth } = useAuth();
+  const { auth, isAdmin } = useAuth();
   const isLoggedIn = !!auth?.accessToken;
 
   const [expanded, setExpanded] = useState(false);
@@ -84,7 +84,7 @@ const MapSettingsMenu = ({ visibleChains, onToggleChain }) => {
             border: `1px solid ${isDark ? "#334155" : theme.palette.divider}`,
           }}
         >
-          {isLoggedIn && (
+          {isAdmin && (
             <IconButton
               aria-label="Контролна табла"
               onClick={() => navigate("/dashboard")}

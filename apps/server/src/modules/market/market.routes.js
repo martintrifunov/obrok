@@ -3,12 +3,11 @@ import { marketController } from "../../container.js";
 import verifyJWT from "../auth/middleware/verifyJWT.js";
 import verifyAdmin from "../auth/middleware/verifyAdmin.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
+import { idSchema } from "../../shared/schemas/zodObjectId.js";
 import {
   marketQuerySchema,
   createMarketSchema,
   updateMarketSchema,
-  deleteMarketSchema,
-  marketParamsSchema,
 } from "./market.schema.js";
 
 const router = Router();
@@ -20,7 +19,7 @@ router.get(
 );
 router.get(
   "/:id",
-  validateRequest(marketParamsSchema, "params"),
+  validateRequest(idSchema, "params"),
   marketController.getById,
 );
 router.post(
@@ -41,7 +40,7 @@ router.delete(
   "/",
   verifyJWT,
   verifyAdmin,
-  validateRequest(deleteMarketSchema),
+  validateRequest(idSchema),
   marketController.delete,
 );
 

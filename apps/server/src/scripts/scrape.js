@@ -1,11 +1,4 @@
-import { config } from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
-
+import "./load-env.js";
 import mongoose from "mongoose";
 import { ChainRepository } from "../modules/chain/chain.repository.js";
 import { ProductRepository } from "../modules/product/product.repository.js";
@@ -25,6 +18,7 @@ import {
   createScraper,
   SCRAPER_KEYS,
 } from "../modules/scraper/scraper.registry.js";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
 async function main() {
   const target = process.argv[2]?.toLowerCase();
@@ -40,7 +34,7 @@ async function main() {
 
   const scrapers = selectedScraper ? [selectedScraper] : createAllScrapers();
 
-  const uri = process.env.MONGO_URI_LOCAL ?? process.env.DATABASE_URI;
+  const uri = scriptMongoUri();
 
   if (!uri) {
     console.error("[scrape] No MongoDB URI found in .env");

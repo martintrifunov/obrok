@@ -7,6 +7,9 @@ const SHOP_LIST_PATH = "/ShopsWeb/LoadShopList";
 const PDF_BASE = "https://kam.com.mk/";
 const FETCH_TIMEOUT_MS = 60_000;
 const FETCH_RETRIES = 3;
+// Wrapped title and description lines sit up to ~19 units below the priced
+// line; the next product starts ~37 units down.
+const CONTINUATION_MAX_GAP = 24;
 
 export class KamScraper extends BaseScraper {
   get chainName() {
@@ -15,10 +18,6 @@ export class KamScraper extends BaseScraper {
 
   get chainImageKey() {
     return "kam";
-  }
-
-  get geocodeSuffix() {
-    return "Македонија";
   }
 
   /**
@@ -136,14 +135,27 @@ export class KamScraper extends BaseScraper {
       if (!colBounds) colBounds = this.#detectColumns(pageItems);
       if (!colBounds) continue;
 
-      const rows = this.#groupRows(pageItems);
-      for (const row of rows) {
-        const product = this.#parseRow(row, colBounds);
-        if (product) products.push(product);
+      // A product's title and description wrap over several lines; only the
+      // first carries the price. Rows without a price below a priced row are
+      // its continuation, as long as they're within one product's height.
+      let current = null;
+      for (const row of this.#groupRows(pageItems)) {
+        const cells = this.#readRow(row, colBounds);
+        if (cells.price > 0) {
+          if (current) products.push(this.#finishProduct(current));
+          current = { ...cells, y: row[0].y };
+        } else if (current && current.y - row[0].y <= CONTINUATION_MAX_GAP) {
+          current.titleParts.push(...cells.titleParts);
+          current.categoryParts.push(...cells.categoryParts);
+        } else if (current) {
+          products.push(this.#finishProduct(current));
+          current = null;
+        }
       }
+      if (current) products.push(this.#finishProduct(current));
     }
 
-    return products;
+    return products.filter(Boolean);
   }
 
   #detectColumns(items) {
@@ -193,7 +205,7 @@ export class KamScraper extends BaseScraper {
     return rows;
   }
 
-  #parseRow(rowItems, cols) {
+  #readRow(rowItems, cols) {
     const sorted = [...rowItems].sort((a, b) => a.x - b.x);
 
     const collect = (key) =>
@@ -203,17 +215,23 @@ export class KamScraper extends BaseScraper {
         .join(" ")
         .trim();
 
-    const title = collect("title");
+    return {
+      titleParts: [collect("title")],
+      categoryParts: [collect("category")],
+      price: parsePrice(collect("price")),
+      // The column runs to the page edge and also picks up the promo price
+      // columns, so only its first word is the "Да"/"Не" answer.
+      available: collect("availability").split(/\s+/)[0].toUpperCase() !== "НЕ",
+    };
+  }
+
+  #finishProduct({ titleParts, categoryParts, price, available }) {
+    const join = (parts) => parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    const title = join(titleParts);
     if (!title || title.length < 2) return null;
-    if (/назив|производ|стока/i.test(title)) return null;
-
-    const availText = collect("availability").toUpperCase();
-    if (availText === "НЕ") return null;
-
-    const price = parsePrice(collect("price"));
-    if (!(price > 0)) return null;
-
-    const category = collect("category") || "Општо";
-    return { title, price, category };
+    // The column header ("Назив производ"); real titles can contain "производ".
+    if (/^(назив|стока)(\s|$)/i.test(title)) return null;
+    if (!available) return null;
+    return { title, price, category: join(categoryParts) || "Општо" };
   }
 }

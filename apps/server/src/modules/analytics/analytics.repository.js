@@ -5,9 +5,23 @@ import {
   AnalyticsMonthlyAggregateModel,
 } from "./analytics.model.js";
 
+const SEARCH_USAGE = {
+  eventType: AnalyticsEventType.FEATURE_USAGE,
+  feature: { $in: ["smart-search", "hybrid-search"] },
+};
+
 export class AnalyticsRepository {
   #monthKey(date) {
     return date.toISOString().slice(0, 7);
+  }
+
+  async #countUnique(match) {
+    const [row] = await AnalyticsEventModel.aggregate([
+      { $match: match },
+      { $group: { _id: "$identityKey" } },
+      { $count: "count" },
+    ]);
+    return row?.count || 0;
   }
 
   #monthRange(date) {
@@ -38,11 +52,7 @@ export class AnalyticsRepository {
   async getFeatureUsageTrend({ from, to }) {
     return AnalyticsEventModel.aggregate([
       {
-        $match: {
-          occurredAt: { $gte: from, $lte: to },
-          eventType: AnalyticsEventType.FEATURE_USAGE,
-          feature: { $in: ["smart-search", "hybrid-search"] },
-        },
+        $match: { occurredAt: { $gte: from, $lte: to }, ...SEARCH_USAGE },
       },
       {
         $group: {
@@ -99,27 +109,18 @@ export class AnalyticsRepository {
 
     const [
       totalVisits,
-      uniqueVisitorsRows,
-      currentMonthUniqueRows,
+      uniqueVisitors,
+      currentMonthUniqueVisitors,
       monthlyRowsArchived,
       monthlyRowsRaw,
       dailyRows,
-      featureTotals,
       featureUsageDaily,
       activeNow,
     ] =
       await Promise.all([
         AnalyticsEventModel.countDocuments(visitDateFilter),
-        AnalyticsEventModel.aggregate([
-          { $match: visitDateFilter },
-          { $group: { _id: "$identityKey" } },
-          { $count: "count" },
-        ]),
-        AnalyticsEventModel.aggregate([
-          { $match: currentMonthVisitsFilter },
-          { $group: { _id: "$identityKey" } },
-          { $count: "count" },
-        ]),
+        this.#countUnique(visitDateFilter),
+        this.#countUnique(currentMonthVisitsFilter),
         // Months archived by the cleanup cron before their raw events were deleted.
         AnalyticsMonthlyAggregateModel.aggregate([
           {
@@ -174,11 +175,7 @@ export class AnalyticsRepository {
                   },
                 },
               },
-              visits: {
-                $sum: {
-                  $cond: [{ $eq: ["$eventType", AnalyticsEventType.PAGE_VIEW] }, 1, 0],
-                },
-              },
+              visits: { $sum: 1 },
               visitors: { $addToSet: "$identityKey" },
             },
           },
@@ -192,16 +189,6 @@ export class AnalyticsRepository {
           },
           { $sort: { day: 1 } },
         ]),
-        AnalyticsEventModel.aggregate([
-          {
-            $match: {
-              occurredAt: { $gte: from, $lte: to },
-              eventType: AnalyticsEventType.FEATURE_USAGE,
-              feature: { $in: ["smart-search", "hybrid-search"] },
-            },
-          },
-          { $group: { _id: "$feature", count: { $sum: 1 } } },
-        ]),
         this.getFeatureUsageTrend({ from, to }),
         VisitorSessionModel.countDocuments({
           lastSeenAt: {
@@ -211,13 +198,9 @@ export class AnalyticsRepository {
       ]);
 
     const usage = {
-      "smart-search": 0,
-      "hybrid-search": 0,
+      "smart-search": featureUsageDaily.reduce((sum, row) => sum + row.smartSearch, 0),
+      "hybrid-search": featureUsageDaily.reduce((sum, row) => sum + row.hybridSearch, 0),
     };
-
-    featureTotals.forEach((row) => {
-      usage[row._id] = row.count;
-    });
 
     const monthlyMap = new Map();
     monthlyRowsArchived.forEach((row) => {
@@ -233,8 +216,8 @@ export class AnalyticsRepository {
 
     return {
       totalVisits,
-      uniqueVisitors: uniqueVisitorsRows[0]?.count || 0,
-      currentMonthUniqueVisitors: currentMonthUniqueRows[0]?.count || 0,
+      uniqueVisitors,
+      currentMonthUniqueVisitors,
       activeUsersNow: activeNow,
       featureUsage: usage,
       featureUsageDaily,
@@ -247,29 +230,13 @@ export class AnalyticsRepository {
     const { monthStart, monthEnd } = this.#monthRange(monthDate);
     const month = this.#monthKey(monthStart);
 
-    const [visits, uniqueRows, featureRows] = await Promise.all([
-      AnalyticsEventModel.countDocuments({
-        occurredAt: { $gte: monthStart, $lt: monthEnd },
-        eventType: AnalyticsEventType.PAGE_VIEW,
-      }),
+    const inMonth = { occurredAt: { $gte: monthStart, $lt: monthEnd } };
+    const pageViews = { ...inMonth, eventType: AnalyticsEventType.PAGE_VIEW };
+    const [visits, uniqueVisitors, featureRows] = await Promise.all([
+      AnalyticsEventModel.countDocuments(pageViews),
+      this.#countUnique(pageViews),
       AnalyticsEventModel.aggregate([
-        {
-          $match: {
-            occurredAt: { $gte: monthStart, $lt: monthEnd },
-            eventType: AnalyticsEventType.PAGE_VIEW,
-          },
-        },
-        { $group: { _id: "$identityKey" } },
-        { $count: "count" },
-      ]),
-      AnalyticsEventModel.aggregate([
-        {
-          $match: {
-            occurredAt: { $gte: monthStart, $lt: monthEnd },
-            eventType: AnalyticsEventType.FEATURE_USAGE,
-            feature: { $in: ["smart-search", "hybrid-search"] },
-          },
-        },
+        { $match: { ...inMonth, ...SEARCH_USAGE } },
         { $group: { _id: "$feature", count: { $sum: 1 } } },
       ]),
     ]);
@@ -290,7 +257,7 @@ export class AnalyticsRepository {
           monthStart,
           monthEnd,
           visits,
-          uniqueVisitors: uniqueRows[0]?.count || 0,
+          uniqueVisitors,
           smartSearchUses: featureMap["smart-search"],
           hybridSearchUses: featureMap["hybrid-search"],
           source: "raw-events",

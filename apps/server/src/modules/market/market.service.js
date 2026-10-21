@@ -6,7 +6,7 @@ export class MarketService {
     marketRepository,
     chainRepository,
     marketProductRepository,
-    orphanProductService = null,
+    orphanProductService,
   ) {
     this.marketRepository = marketRepository;
     this.chainRepository = chainRepository;
@@ -15,14 +15,10 @@ export class MarketService {
   }
 
   async getAllMarkets({ page, limit, name, chainId }) {
-    const filter = {};
-    if (name) filter.name = name;
-    if (chainId) filter.chain = chainId;
-
     const { docs, total } = await this.marketRepository.findAll({
       page,
       limit,
-      filter,
+      filter: { name, chain: chainId },
     });
     return {
       data: docs,
@@ -65,6 +61,6 @@ export class MarketService {
     const productIds = await this.marketProductRepository.findProductIdsByMarket(id);
     await this.marketProductRepository.deleteByMarket(id);
     await this.marketRepository.delete(market);
-    await this.orphanProductService?.removeOrphans(productIds);
+    await this.orphanProductService.removeOrphans(productIds);
   }
 }

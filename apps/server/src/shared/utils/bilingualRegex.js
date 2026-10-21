@@ -124,7 +124,7 @@ export const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const normalize = (text) => text.normalize("NFC").toLowerCase();
 
-const transliterateLatinToCyrillic = (text) => {
+export const transliterateLatinToCyrillic = (text) => {
   let cyrStr = normalize(text);
   for (const [lat, cyr] of Object.entries(latToCyrMap)) {
     cyrStr = cyrStr.split(lat).join(cyr);
@@ -166,8 +166,9 @@ export const buildBilingualRegex = (text) => {
   const variants = spellingVariants(text).map(escapeRegExp);
   if (!ASCII_RE.test(text)) return variants.join("|");
 
-  // ASCII input yields exactly [as typed, Cyrillic transliteration].
-  const [latin, cyrillic] = variants;
+  // ASCII input yields [as typed, Cyrillic transliteration], or just one
+  // variant when nothing transliterates ("500", "3%").
+  const [latin, cyrillic = latin] = variants;
   return [widen(latin, LATIN_AMBIGUOUS), widen(cyrillic, CYRILLIC_AMBIGUOUS)].join("|");
 };
 
@@ -175,7 +176,6 @@ export const buildBilingualTokenRegexes = (text) => {
   if (!text) return [];
   return text
     .split(/\s+/)
-    .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => buildBilingualRegex(token))
     .filter(Boolean);

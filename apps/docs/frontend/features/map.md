@@ -6,7 +6,7 @@ title: Map Feature
 
 ## Public Summary
 
-Interactive MapLibre-based map showing supermarket locations, product search, multi-modal routing (walk, bike, car), market clustering, and AI-powered search dialog.
+The public home page is a MapLibre map of supermarket locations with clustered, chain-colored pins, a chain filter, geolocation, OSRM directions (walking, car, cycling) and an AI search dialog with product and meal tabs. This page is the reference for components and configuration; the user journeys are on [Map And UX Flows](../map-flows).
 
 ## Internal Details
 
@@ -14,87 +14,112 @@ Interactive MapLibre-based map showing supermarket locations, product search, mu
 
 | File | Role |
 |------|------|
-| `MapPage.jsx` | Main map page; owns route and dialog state and composes the controls |
-| `RouteControls.jsx` | Routing mode selector and cancel-route button |
-| `MapSettingsMenu.jsx` | Settings menu (dashboard, theme, chain filter, login/logout) |
-| `ChainFilterPopover.jsx` | Chain visibility toggles |
-| `AISearchButton.jsx` | Floating button that opens the AI search dialog |
-| `RoutingEngine.jsx` | OSRM route rendering |
-| `MarketMarkers.jsx` | Market pins with clustering |
-| `CreditMarker.jsx` | Map attribution |
-| `GlobalAISearchDialog.jsx` | AI search overlay; owns tab, debounce, and query state |
-| `ai-search/ProductSearchTab.jsx` | Product search tab (results, price sort, pagination) |
-| `ai-search/MealSearchTab.jsx` | Meal (smart search) tab with budget and market breakdown |
-| `ai-search/MealMarketCard.jsx` / `ProductResultCard.jsx` | Result cards for each tab |
-| `RouteConfirmDialog.jsx` | Route mode selection dialog |
-| `LocateUser.jsx` | Geolocation button |
-| `UserDot.jsx` | User position indicator |
-| `MapProductInfoModal.jsx` | Market product detail modal |
-| `useMapPitch.js` | 3D pitch interaction hook |
-| `useVisibleChains.js` | Chain filter state persisted to `localStorage` |
-| `markerUtils.js` | Marker helper utilities |
-| `formatDistance.js` | Meters/kilometers label formatting |
-| `add3dBuildingsLayer.js` | Adds the 3D buildings layer on map load |
-| `mapPopupStyles.js` | Theme overrides for MapLibre popups and attribution |
-| `defaultVisibleChains.js` | Default chain filter config |
-| `markerColors.js` | Chain color mapping |
-| `markerPaths.js` | SVG marker path definitions |
+| `pages/MapPage.jsx` | Map setup; owns route, dialog and smart-route state |
+| `components/MarketMarkers.jsx` | Clustered pins and the market popup |
+| `components/CreditMarker.jsx` | Purple "about Obrok" pin at the initial center |
+| `components/LocateUser.jsx` / `UserDot.jsx` | Geolocation watch and the blue position dot |
+| `components/RoutingEngine.jsx` | OSRM request and route line |
+| `components/RouteControls.jsx` | Mode buttons and cancel-route button |
+| `components/RouteConfirmDialog.jsx` | Yes/no confirm before routing from AI search |
+| `components/MapSettingsMenu.jsx` | Gear menu: dashboard (logged in), theme, chain filter, login/logout |
+| `components/ChainFilterPopover.jsx` | Chain visibility toggles |
+| `components/AISearchButton.jsx` | Opens the AI search dialog |
+| `components/GlobalAISearchDialog.jsx` | AI search dialog; owns tab, debounce and query state |
+| `components/ai-search/` | `ProductSearchTab`, `MealSearchTab`, result cards, input bar, status messages |
+| `components/MapProductInfoModal.jsx` | Popup "Products" button that opens `SharedMarketProductsModal` |
+| `hooks/useVisibleChains.js` | Chain filter state, persisted |
+| `hooks/useMapPitch.js` | Current pitch, used to offset pins in 3D |
+| `config/markerColors.js` | Chain colors and `getChainColor` |
+| `config/defaultVisibleChains.js` | Known chain names and default filter |
+| `config/markerPaths.js` / `mapPopupStyles.js` | Pin SVG paths; popup theme overrides |
+| `utils/markerUtils.js` | Pin color and cluster gradient |
+| `utils/formatDistance.js` | `850m` / `1.2 km` labels |
+| `utils/add3dBuildingsLayer.js` | 3D buildings layer (from zoom 15) |
 
-### Key Interactions
+### Chains, Colors And Filter
 
-```mermaid
-flowchart TD
-    A[MapPage] --> B[MarketMarkers]
-    A --> C[RoutingEngine]
-    A --> D[GlobalAISearchDialog]
-    A --> E[LocateUser]
-    B --> F[Supercluster Grouping]
-    F --> G[Click → MapProductInfoModal]
-    G --> H[Route to Market → RouteConfirmDialog]
-    H --> I[OSRM Route via RoutingEngine]
-    D --> J[AI Search Results]
-    J --> K[Select → Fly to Market]
-```
+| Chain | Color |
+|-------|-------|
+| Vero | `crimson` |
+| Ramstore | `#2e7d32` |
+| Stokomak | `#f4c430` |
+| KAM | `#ff5fa2` |
 
-### Clustering
+- These four are the only chains the filter knows (`KNOWN_CHAIN_NAMES` is built from `markerColors.js`). Super KIT-GO and Kipper were removed.
+- `getChainColor` matches case- and punctuation-insensitively and also on substrings; unknown chains get the Vero color.
+- A market is shown only if its chain name is in the visible set (case-insensitive). Markets without a chain name are hidden.
+- Clusters (Supercluster, radius 50, clustering up to zoom 15) are colored with a conic gradient of the chains they contain. Clicking a cluster zooms to its expansion level.
 
-Uses **Supercluster** to group nearby markets at lower zoom levels, expanding to individual markers on zoom in. Performance optimization for hundreds of market locations.
+**Default visible chains.** `VITE_DEFAULT_VISIBLE_CHAINS` is a comma-separated list, matched against the known chains ignoring case and punctuation. Unknown names are dropped. If it is unset, empty or matches nothing, the default is `Vero, Ramstore`.
+
+**Stored selection.** `useVisibleChains` saves the selection to `localStorage` key `obrok.map.visibleChains` as a JSON array. On load:
+
+| Stored value | Result |
+|--------------|--------|
+| Missing, corrupt or not an array | Defaults |
+| `[]` | Nothing visible (respected as a choice) |
+| Names | Canonicalized (`"kam"` becomes `"KAM"`); unknown names such as `"Kipper"` are dropped; if none remain, defaults |
+
+### Geolocation
+
+`LocateUser` uses `watchPosition` with high accuracy, switching to low accuracy if there is no fix within 5 seconds and retrying high accuracy 30 seconds after a timeout. The first fix flies the map to the user (zoom 16, or 13 if accuracy is worse than 1 km). After that, high-accuracy fixes worse than 100 m are ignored, the parent is notified only after moving more than 15 m, and the map follows the user only while no route is active. No fix within 10 seconds, or a denied or unavailable position, disables routing.
 
 ### Routing
 
-- **OSRM backend** at `/route/` for path calculation.
-- Three modes: walking, cycling, driving.
-- Route rendered as styled polyline on map.
-- Route confirmation dialog lets user pick mode before rendering.
+`RoutingEngine` calls OSRM directly from the browser, not through the API:
 
-### Chain Filters
+`${VITE_OSRM_URL}/{profile}/{startLng},{startLat};{endLng},{endLat}?overview=full&geometries=geojson`
 
-- Users can toggle chain visibility (e.g., show only Vero markets).
-- Filter state persisted to `localStorage` by `useVisibleChains`; corrupt or unknown stored values fall back to the defaults.
-- Default visible chains configured in `defaultVisibleChains.js`.
+| Mode | OSRM profile | Line |
+|------|--------------|------|
+| `walking` (default) | `foot` | `#DC143C`, dashed |
+| `car` | `car` | `#FF073A`, solid |
+| `cycling` | `bicycle` | `#FF0080`, dotted |
 
-### Feature Flag Integration
+The map fits the route once per destination (max zoom 16). Changing mode refetches; the previous request is aborted.
 
-- `ai-search` flag gates the `GlobalAISearchDialog` component.
-- When disabled, only basic map browsing is available.
+### AI Search Dialog
 
-### Dependencies
+The AI button appears only when the `ai-search` flag is on (and the map is not loading). The dialog has two tabs only when `smart-search` is also on; otherwise it shows just the product search.
 
-| Dependency | Usage |
-|------------|-------|
-| MapLibre GL / react-map-gl | Map rendering |
-| Supercluster | Marker clustering |
-| OSRM | Routing engine |
-| `themeStore` | Dark/light map style |
-| `featureFlagStore` | AI search gate |
-| `useAuth` / `useLogout` | Auth state in header |
+| Tab | Debounce | Request | Results |
+|-----|----------|---------|---------|
+| Meal ("Оброк", first tab) | 700 ms | `POST /smart-search` with `{ q, lat, lon, budgetOnly }`; budget from `GET /smart-search/budget` | Shopping list (found / not found), then market cards with matched count, total price, over-budget surcharge and a distance chip |
+| Product ("Пребарување") | 500 ms | `GET /search?q&page&limit=10` | Products with per-market price chips, price-sort chip, pagination |
+
+- Meal search sends the user's location rounded to 4 decimals. If the query was sent before the first GPS fix, the fix is attached once when it arrives; later movement does not re-run the query.
+- Meal search is never retried on 429 and shows a "try again in a minute" message (the server allows 10 requests per minute per IP). A `redirect` result tells the user to try a more specific meal or the product tab.
+- Clicking a product's market chip (only if the market has coordinates) or a meal market's distance chip starts the confirm-and-route flow.
+- Closing with the X button, backdrop or Escape clears both inputs and returns to the first tab.
+
+### Other Flag Uses
+
+`SharedMarketProductsModal` shows an AI-mode toggle (search via `GET /search` scoped to the market) only when `ai-search` is on. Without it, the modal searches by title and category through `GET /products`.
 
 ### Tests
 
-Client tests use Vitest, jsdom, and Testing Library (`npm test` in `apps/client`). Map coverage includes the chain filter hook, marker and distance utilities, the settings menu, and the AI search dialog (debounce, rounded location, route requests, rate-limit message). Query hooks are mocked, so the tests never hit the API.
+Specs cover `useVisibleChains`, `markerUtils`, `formatDistance`, `MapSettingsMenu` (guest vs logged-in actions, chain filter), `MealSearchTab`, and `GlobalAISearchDialog` (tabs per flag, debounce, rounded and late-attached location, route requests, explicit close). Query hooks are mocked.
 
 ## Source Anchors
 
 | Path | Relevance |
 |------|-----------|
 | `apps/client/src/features/map/` | Pages, components, hooks, config, utils |
+| `apps/client/src/features/map/config/markerColors.js` | Chain colors |
+| `apps/client/src/features/map/config/defaultVisibleChains.js` | Known chains, env default |
+| `apps/client/src/features/map/hooks/useVisibleChains.js` | Filter persistence |
+| `apps/client/src/features/map/components/GlobalAISearchDialog.jsx` | AI search tabs and queries |
+| `apps/client/src/features/products/hooks/useProductQueries.js` | `useAISearch`, `useSmartSearch`, `useSmartSearchBudget` |
+| `apps/client/src/features/markets/hooks/useMarketQueries.js` | `useMarketsForMap` |
+| `apps/client/src/components/ui/SharedMarketProductsModal.jsx` | Per-market products modal |
+
+## Risks and Trade-offs
+
+- The chain list is hard-coded in `markerColors.js`. A new chain from the scraper stays hidden on the map until it is added there.
+- Substring color matching is forgiving but can pick the wrong color if one chain name contains another.
+- All markets are loaded at once and clustered in the browser; that is fine at the current scale but grows with the market count.
+- The map style is fixed; dark mode changes popups and controls but not the tiles.
+
+## Next Extension Points
+
+- Move the known chain list and colors to API data so new chains need no client release.

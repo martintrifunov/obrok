@@ -13,10 +13,6 @@ export class VeroScraper extends BaseScraper {
     return "vero";
   }
 
-  get geocodeSuffix() {
-    return "Македонија";
-  }
-
   /**
    * @param {import('puppeteer').Page} page
    * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}

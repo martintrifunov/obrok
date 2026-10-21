@@ -3,12 +3,11 @@ import { productController } from "../../container.js";
 import verifyJWT from "../auth/middleware/verifyJWT.js";
 import verifyAdmin from "../auth/middleware/verifyAdmin.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
+import { idSchema } from "../../shared/schemas/zodObjectId.js";
 import {
   productQuerySchema,
   createProductSchema,
   updateProductSchema,
-  deleteProductSchema,
-  productParamsSchema,
   categoriesQuerySchema,
 } from "./product.schema.js";
 
@@ -26,7 +25,7 @@ router.get(
 );
 router.get(
   "/:id",
-  validateRequest(productParamsSchema, "params"),
+  validateRequest(idSchema, "params"),
   productController.getById,
 );
 router.post(
@@ -47,7 +46,7 @@ router.delete(
   "/",
   verifyJWT,
   verifyAdmin,
-  validateRequest(deleteProductSchema),
+  validateRequest(idSchema),
   productController.delete,
 );
 

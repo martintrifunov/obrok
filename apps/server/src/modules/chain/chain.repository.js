@@ -1,14 +1,9 @@
 import { ChainModel } from "./chain.model.js";
 import { escapeRegExp } from "../../shared/utils/bilingualRegex.js";
 
-export class ChainRepository {
-  #populate() {
-    return {
-      image: { path: "image", select: "title url mimeType" },
-      markets: { path: "markets" },
-    };
-  }
+const IMAGE = { path: "image", select: "title url mimeType" };
 
+export class ChainRepository {
   #buildQuery(filter = {}) {
     const query = {};
     if (filter.name) {
@@ -18,33 +13,20 @@ export class ChainRepository {
   }
 
   async findAll({ page, limit, filter = {} }) {
-    const { image, markets } = this.#populate();
     const query = this.#buildQuery(filter);
+    const find = () => ChainModel.find(query).populate(IMAGE).populate("markets");
 
-    if (limit === 0) {
-      const docs = await ChainModel.find(query)
-        .populate(image)
-        .populate(markets)
-        .exec();
-      return { docs, total: null };
-    }
+    if (limit === 0) return { docs: await find().exec(), total: null };
 
-    const skip = (page - 1) * limit;
     const [docs, total] = await Promise.all([
-      ChainModel.find(query)
-        .populate(image)
-        .populate(markets)
-        .skip(skip)
-        .limit(limit)
-        .exec(),
+      find().skip((page - 1) * limit).limit(limit).exec(),
       ChainModel.countDocuments(query).exec(),
     ]);
     return { docs, total };
   }
 
   async findById(id) {
-    const { image, markets } = this.#populate();
-    return ChainModel.findById(id).populate(image).populate(markets).exec();
+    return ChainModel.findById(id).populate(IMAGE).populate("markets").exec();
   }
 
   async findByName(name) {
@@ -59,7 +41,7 @@ export class ChainRepository {
     return chain.save();
   }
 
-  async delete(chain, options = {}) {
-    return chain.deleteOne(options);
+  async delete(chain) {
+    return chain.deleteOne();
   }
 }

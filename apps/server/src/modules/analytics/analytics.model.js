@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 
 export const AnalyticsEventType = {
   PAGE_VIEW: "page_view",
-  HEARTBEAT: "heartbeat",
   FEATURE_USAGE: "feature_usage",
 };
 

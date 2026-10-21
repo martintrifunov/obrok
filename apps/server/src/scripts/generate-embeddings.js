@@ -1,32 +1,16 @@
-import { config } from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
-import crypto from "crypto";
+import "./load-env.js";
 import mongoose from "mongoose";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
-import { ProductModel } from "../modules/product/product.model.js";
-import { ProductEmbeddingModel } from "../modules/search/product-embedding.model.js";
 import { EmbeddingService } from "../modules/search/embedding.service.js";
-
-const BATCH_SIZE = 50;
-
-const textHash = (text) => crypto.createHash("md5").update(text).digest("hex");
-
-const buildEmbeddingText = (product) => {
-  const parts = [product.title];
-  if (product.category) parts.push(product.category);
-  return parts.join(" ");
-};
+import { ProductEmbeddingRepository } from "../modules/search/product-embedding.repository.js";
+import { syncProductEmbeddings } from "../modules/search/product-embedding-sync.service.js";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
 const main = async () => {
   const force =
     process.argv.includes("--force") ||
     process.env.npm_config_force === "true" ||
     process.env.npm_config_force === "1";
-  const dbUri = process.env.MONGO_URI_LOCAL || process.env.DATABASE_URI;
+  const dbUri = scriptMongoUri();
 
   if (!dbUri) {
     console.error("Set DATABASE_URI or MONGO_URI_LOCAL in .env");
@@ -40,71 +24,18 @@ const main = async () => {
   }
 
   await mongoose.connect(dbUri);
-  console.log("[Embeddings] Connected to MongoDB");
-  console.log(`[Embeddings] Force mode: ${force ? "ON" : "OFF"}`);
+  console.log(`[Embeddings] Connected to MongoDB. Force mode: ${force ? "ON" : "OFF"}`);
 
-  const totalProducts = await ProductModel.countDocuments().exec();
-  console.log(`[Embeddings] Found ${totalProducts} products`);
+  const ok = await syncProductEmbeddings({
+    embeddingService,
+    productEmbeddingRepository: new ProductEmbeddingRepository(),
+    featureFlagService: null,
+    force,
+    logPrefix: "[Embeddings]",
+  });
 
-  const existingMap = new Map();
-  if (!force) {
-    const existing = await ProductEmbeddingModel.find()
-      .select("product textHash")
-      .lean()
-      .exec();
-    for (const e of existing) existingMap.set(e.product.toString(), e.textHash);
-  }
-
-  const toEmbed = [];
-  const cursor = ProductModel.find()
-    .select("_id title category")
-    .lean()
-    .cursor({ batchSize: 500 });
-
-  for await (const product of cursor) {
-    const text = buildEmbeddingText(product);
-    const hash = textHash(text);
-    if (!force && existingMap.get(product._id.toString()) === hash) continue;
-    toEmbed.push({ productId: product._id, text, hash });
-  }
-
-  console.log(
-    `[Embeddings] ${toEmbed.length} products need embeddings (${totalProducts - toEmbed.length} skipped)`,
-  );
-
-  if (toEmbed.length === 0) {
-    await mongoose.disconnect();
-    return;
-  }
-
-  let processed = 0;
-  for (let i = 0; i < toEmbed.length; i += BATCH_SIZE) {
-    const batch = toEmbed.slice(i, i + BATCH_SIZE);
-    const texts = batch.map((b) => b.text);
-
-    const embeddings = await embeddingService.generateBatchEmbeddings(texts);
-
-    const entries = batch.map((b, idx) => ({
-      productId: b.productId,
-      embedding: embeddings[idx],
-      textHash: b.hash,
-    }));
-
-    const ops = entries.map(({ productId, embedding, textHash }) => ({
-      updateOne: {
-        filter: { product: productId },
-        update: { $set: { embedding, textHash } },
-        upsert: true,
-      },
-    }));
-    await ProductEmbeddingModel.bulkWrite(ops, { ordered: false });
-
-    processed += batch.length;
-    console.log(`[Embeddings] ${processed}/${toEmbed.length} processed`);
-  }
-
-  console.log(`[Embeddings] Done. ${processed} embeddings generated.`);
   await mongoose.disconnect();
+  if (!ok) process.exitCode = 1;
 };
 
 main().catch((err) => {

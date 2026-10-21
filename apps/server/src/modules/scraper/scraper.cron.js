@@ -11,12 +11,14 @@ import { APP_TIME_ZONE } from "../../shared/utils/calendarDate.js";
  * @param {import('../search/embedding.service.js').EmbeddingService} embeddingService
  * @param {import('../search/product-embedding.repository.js').ProductEmbeddingRepository} productEmbeddingRepository
  * @param {import('../feature-flag/feature-flag.service.js').FeatureFlagService} featureFlagService
+ * @param {import('../search/vector-index.js').VectorIndex} [vectorIndex]
  */
 export const startScraperCron = (
   scraperService,
   embeddingService,
   productEmbeddingRepository,
   featureFlagService,
+  vectorIndex,
 ) => {
   const task = cron.schedule("0 3 * * 1,4", async () => {
     console.log("[ScraperCron] Starting scheduled scrape run...");
@@ -43,6 +45,7 @@ export const startScraperCron = (
       featureFlagService,
       logPrefix: "[ScraperCron]",
     });
+    await vectorIndex?.refreshIfStale();
   }, { timezone: APP_TIME_ZONE });
 
   console.log(

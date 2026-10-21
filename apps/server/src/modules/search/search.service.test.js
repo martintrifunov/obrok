@@ -1,38 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SearchService } from "./search.service.js";
 
-// Mock Mongoose models before importing SearchService
-vi.mock("../product/product.model.js", () => ({
-  ProductModel: {
-    find: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        limit: vi.fn().mockReturnValue({
-          lean: vi.fn().mockReturnValue({
-            exec: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      }),
-    }),
-  },
-}));
-
-vi.mock("../product/market-product.model.js", () => ({
-  MarketProductModel: {
-    find: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        lean: vi.fn().mockReturnValue({
-          exec: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    }),
-    aggregate: vi.fn().mockResolvedValue([]),
-  },
-}));
-
-const { SearchService } = await import("./search.service.js");
+const emptyRepository = () => ({
+  findMatching: vi.fn().mockResolvedValue([]),
+  findTitleStartingWith: vi.fn().mockResolvedValue([]),
+  findMatchingInMarket: vi.fn().mockResolvedValue([]),
+  findMarketProductIds: vi.fn().mockResolvedValue([]),
+  keepPriced: vi.fn(async (ids) => ids.map(String)),
+  findPriceRanges: vi.fn().mockResolvedValue(new Map()),
+  findTitles: vi.fn().mockResolvedValue(new Map()),
+  findForDisplay: vi.fn().mockResolvedValue({ products: [], marketProducts: [] }),
+});
 
 describe("SearchService", () => {
   let embeddingService;
-  let productEmbeddingRepository;
+  let vectorIndex;
   let featureFlagService;
   let service;
 
@@ -40,20 +22,14 @@ describe("SearchService", () => {
     embeddingService = {
       isAvailable: vi.fn().mockReturnValue(true),
       generateEmbedding: vi.fn(),
-      generateBatchEmbeddings: vi.fn(),
     };
-    productEmbeddingRepository = {
-      findAll: vi.fn().mockResolvedValue([]),
-      findByProducts: vi.fn().mockResolvedValue([]),
+    vectorIndex = {
+      isReady: vi.fn().mockReturnValue(true),
+      load: vi.fn().mockResolvedValue(undefined),
+      search: vi.fn().mockReturnValue([]),
     };
-    featureFlagService = {
-      isEnabled: vi.fn(),
-    };
-    service = new SearchService(
-      embeddingService,
-      productEmbeddingRepository,
-      featureFlagService,
-    );
+    featureFlagService = { isEnabled: vi.fn() };
+    service = new SearchService(emptyRepository(), embeddingService, vectorIndex, featureFlagService);
   });
 
   it("returns empty results when ai-search flag is disabled", async () => {
@@ -65,16 +41,43 @@ describe("SearchService", () => {
     expect(embeddingService.generateEmbedding).not.toHaveBeenCalled();
   });
 
-  it("calls vector search with RETRIEVAL_QUERY task type", async () => {
+  it("embeds the query for vector search", async () => {
     featureFlagService.isEnabled.mockResolvedValue(true);
     embeddingService.generateEmbedding.mockResolvedValue(new Array(768).fill(0));
 
     await service.search({ q: "леб", page: 1, limit: 10 });
 
-    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith(
-      "леб",
-      "RETRIEVAL_QUERY",
-    );
+    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("леб");
+  });
+
+  it("embeds Latin queries in Cyrillic", async () => {
+    featureFlagService.isEnabled.mockResolvedValue(true);
+    embeddingService.generateEmbedding.mockResolvedValue([1, 0]);
+
+    await service.search({ q: "najeftin kaskaval", page: 1, limit: 10 });
+
+    expect(embeddingService.generateEmbedding).toHaveBeenCalledWith("каскавал");
+  });
+
+  it("starts loading the index and answers keyword-only while it isn't ready", async () => {
+    featureFlagService.isEnabled.mockResolvedValue(true);
+    vectorIndex.isReady.mockReturnValue(false);
+
+    await service.search({ q: "леб", page: 1, limit: 10 });
+
+    expect(vectorIndex.load).toHaveBeenCalled();
+    expect(embeddingService.generateEmbedding).not.toHaveBeenCalled();
+  });
+
+  it("answers keyword-only when the query embedding fails", async () => {
+    featureFlagService.isEnabled.mockResolvedValue(true);
+    embeddingService.generateEmbedding.mockRejectedValue(new Error("503 UNAVAILABLE"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await service.search({ q: "леб", page: 1, limit: 10 });
+
+    expect(result.data).toEqual([]);
+    expect(vectorIndex.search).not.toHaveBeenCalled();
   });
 
   it("falls back to keyword-only when embeddings unavailable", async () => {

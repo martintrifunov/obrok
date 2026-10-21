@@ -23,7 +23,7 @@ export const createProductSchema = z
     price: z.number().positive("Price must be greater than 0.").optional(),
   })
   .refine(
-    (data) => !(data.market && !data.price) && !(data.price && !data.market),
+    (data) => !!data.market === !!data.price,
     {
       message: "Market and price must be provided together.",
       path: ["market"],
@@ -60,14 +60,6 @@ export const updateProductSchema = z.object({
       "Each market can only be added once.",
     )
     .optional(),
-});
-
-export const deleteProductSchema = z.object({
-  id: zodObjectId,
-});
-
-export const productParamsSchema = z.object({
-  id: zodObjectId,
 });
 
 export const categoriesQuerySchema = z.object({

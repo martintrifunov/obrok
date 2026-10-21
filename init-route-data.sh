@@ -1,21 +1,15 @@
 #!/bin/bash
+set -e # Stop at the first failing step instead of processing stale data
 
-# Check if the directory /data exists, if not, create it
-if [ ! -d "./data" ]; then
-  mkdir ./data
-  echo "Created directory: ./data"
-fi
+map_dir="./data/map"
+pbf="macedonia-latest.osm.pbf"
+mkdir -p "$map_dir"
 
-# Check if the directory /data/map exists, if not, create it
-if [ ! -d "./data/map" ]; then
-  mkdir ./data/map
-  echo "Created directory: ./data/map"
-fi
-
-# Download the data
-wget -P ./data/map http://download.geofabrik.de/europe/macedonia-latest.osm.pbf
+# -O overwrites the previous download; -P would save a refresh as "$pbf.1"
+# and the steps below would keep processing the old file.
+wget -O "$map_dir/$pbf" "https://download.geofabrik.de/europe/$pbf"
 
 # Preprocess the data
-docker run -t -v $(pwd)/data/map:/data osrm/osrm-backend osrm-extract -p /opt/car.lua /data/macedonia-latest.osm.pbf
-docker run -t -v $(pwd)/data/map:/data osrm/osrm-backend osrm-partition /data/macedonia-latest.osrm
-docker run -t -v $(pwd)/data/map:/data osrm/osrm-backend osrm-customize /data/macedonia-latest.osrm
+docker run -t -v "$(pwd)/data/map:/data" osrm/osrm-backend osrm-extract -p /opt/car.lua "/data/$pbf"
+docker run -t -v "$(pwd)/data/map:/data" osrm/osrm-backend osrm-partition /data/macedonia-latest.osrm
+docker run -t -v "$(pwd)/data/map:/data" osrm/osrm-backend osrm-customize /data/macedonia-latest.osrm

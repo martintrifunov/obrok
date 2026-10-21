@@ -14,11 +14,10 @@
  *   node src/scripts/populate-coordinates.js vero     # only Vero
  *   node src/scripts/populate-coordinates.js --force  # re-geocode everything
  */
-import { fileURLToPath } from "url";
+import "./load-env.js";
 import path from "path";
 import fs from "fs";
 import puppeteer from "puppeteer";
-import { config } from "dotenv";
 
 import {
   createScraper,
@@ -26,11 +25,7 @@ import {
 } from "../modules/scraper/scraper.registry.js";
 import { normalizeMarketName } from "../modules/scraper/normalize-market-name.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
-
-const COORDS_PATH = path.resolve(__dirname, "../data/market-coordinates.json");
+const COORDS_PATH = path.resolve(import.meta.dirname, "../data/market-coordinates.json");
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -270,14 +265,8 @@ const buildQueries = (market, chainName) => {
   const cleanAddress = normalizeAddress(rawAddress);
   const addressNoCity = stripTrailingCity(cleanAddress, city);
 
-  const branchLabel = normalizeAddress(
-    (market.name || "").replace(/^СУПЕР\s+КИТ-ГО\s*/i, ""),
-  );
-
   const cityLatin = city ? transliterate(city) : "";
   const addressLatin = transliterate(addressNoCity || cleanAddress);
-  const branchLatin = transliterate(branchLabel);
-  const isSuperKitGo = /kit-go/i.test(chainName);
 
   const querySet = new Set([
     cityLatin ? `${addressLatin}, ${cityLatin}, North Macedonia` : null,
@@ -285,18 +274,6 @@ const buildQueries = (market, chainName) => {
     `${chainName} ${cityLatin || addressLatin}, North Macedonia`,
     cityLatin ? `${cityLatin}, North Macedonia` : null,
   ]);
-
-  if (isSuperKitGo) {
-    querySet.add(branchLatin ? `${branchLatin}, ${cityLatin}, North Macedonia` : null);
-    querySet.add(
-      branchLatin ? `Super Kit-Go ${branchLatin}, ${cityLatin}, North Macedonia` : null,
-    );
-    querySet.add(
-      cityLatin && branchLatin
-        ? `Super Kit-Go ${branchLatin} ${cityLatin}, North Macedonia`
-        : null,
-    );
-  }
 
   return [...querySet].filter((q) => q && q.length > 10 && !q.includes(", ,"));
 };

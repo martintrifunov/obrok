@@ -3,12 +3,11 @@ import { chainController } from "../../container.js";
 import verifyJWT from "../auth/middleware/verifyJWT.js";
 import verifyAdmin from "../auth/middleware/verifyAdmin.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
+import { idSchema } from "../../shared/schemas/zodObjectId.js";
 import {
   chainQuerySchema,
   createChainSchema,
   updateChainSchema,
-  deleteChainSchema,
-  chainParamsSchema,
 } from "./chain.schema.js";
 
 const router = Router();
@@ -21,7 +20,7 @@ router.get(
 );
 router.get(
   "/:id",
-  validateRequest(chainParamsSchema, "params"),
+  validateRequest(idSchema, "params"),
   chainController.getById,
 );
 router.post(
@@ -42,7 +41,7 @@ router.delete(
   "/",
   verifyJWT,
   verifyAdmin,
-  validateRequest(deleteChainSchema),
+  validateRequest(idSchema),
   chainController.delete,
 );
 

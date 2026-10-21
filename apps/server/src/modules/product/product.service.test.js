@@ -77,16 +77,6 @@ describe("ProductService", () => {
       expect(result.pagination).toMatchObject({ total: 1, page: 1, limit: 10 });
     });
 
-    it("returns null pagination when limit is 0", async () => {
-      mockProductRepository.findAll.mockResolvedValue({
-        docs: [],
-        total: null,
-      });
-      const sut = makeSut();
-      const result = await sut.getAllProducts({ page: 1, limit: 0 });
-      expect(result.pagination).toBeNull();
-    });
-
     it("passes filter parameters correctly to the repository", async () => {
       mockProductRepository.findAll.mockResolvedValue({ docs: [], total: 0 });
       const sut = makeSut();

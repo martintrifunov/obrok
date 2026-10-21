@@ -30,7 +30,7 @@ export class ImageService {
   }
 
   async uploadImage(file) {
-    if (!file) throw new ValidationError("Image file is required.");
+    if (!file) throw new ValidationError({ message: "Image file is required." });
 
     try {
       return await this.imageRepository.create({

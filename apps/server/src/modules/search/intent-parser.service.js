@@ -1,32 +1,36 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
+import { parseSearchQuery, mealCacheKey } from "./query-rules.js";
+import { isModelUnavailableError, isTransientError, retryDelayMs } from "../../shared/ai/gemini-errors.js";
 
-const MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+// Cheapest first; the second is a fallback if the first is unavailable.
+const MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+const MEMORY_CACHE_SIZE = 500;
+const MAX_INGREDIENTS = 10;
+const MAX_RETRY_DELAY_MS = 30_000;
 
-const SYSTEM_PROMPT = `You are a query intent parser for a Macedonian grocery price comparison app.
-Analyze the user query and return structured JSON.
-
-Rules:
-- "searchTerms": the cleaned query with price/intent modifiers removed. Keep only product names.
-- "priceSort": "asc" if user wants cheapest/најефтин/najeftin/поевтино/поевтин/budget/евтин/evtin, "desc" if most expensive/најскап/najskap/поскапо/скап/skap/luxury/premium, null otherwise.
-- "intent": "recipe" if user describes a meal, dish, or says they want to eat something (сакам да јадам/sakam da jadam/направи ми/napravi mi). "search" for simple product lookups.
-- "products": only for "recipe" intent — array of individual ingredient/product names decomposed from the meal description. Each should be a single grocery item in Macedonian Cyrillic. For example "sendvich so kaskaval i shunka" → ["леб", "кашкавал", "шунка"]. Think about what ingredients are needed.
-
-Handle both Cyrillic and Latin Macedonian text. Transliterate Latin to Cyrillic for product names in output.
-
+const SYSTEM_PROMPT = `Split a Macedonian meal request into the groceries needed to make it.
+Input is Macedonian in Cyrillic or Latin script.
+- intent: "recipe" if the text names a dish or meal; otherwise "search" with no products.
+- products: each grocery item once, in Macedonian Cyrillic, named the way Macedonian supermarkets label them (e.g. "тестенини", not "паста"; "бело сирење"; "мелено месо"). Skip water, salt and pepper.
 Examples:
-- "najeftin kaskaval" → {"searchTerms":"кашкавал","priceSort":"asc","intent":"search","products":[]}
-- "најскапо млеко" → {"searchTerms":"млеко","priceSort":"desc","intent":"search","products":[]}
-- "kaskaval" → {"searchTerms":"кашкавал","priceSort":null,"intent":"search","products":[]}
-- "sakam da jadam sendvich so kaskaval i shunka" → {"searchTerms":"сендвич кашкавал шунка","priceSort":"asc","intent":"recipe","products":["леб","кашкавал","шунка"]}
-- "направи ми палачинки" → {"searchTerms":"палачинки","priceSort":"asc","intent":"recipe","products":["брашно","јајца","млеко","шеќер","путер"]}
-- "monster energy" → {"searchTerms":"monster energy","priceSort":null,"intent":"search","products":[]}
+"sendvich so kaskaval i shunka" -> {"intent":"recipe","products":["леб","кашкавал","шунка"]}
+"направи ми палачинки" -> {"intent":"recipe","products":["брашно","јајца","млеко","шеќер","путер"]}
+"monster energy" -> {"intent":"search","products":[]}`;
 
-Always return valid JSON matching this exact schema. For recipe intent, default priceSort to "asc" (cheapest) unless user explicitly asks for expensive.`;
+const RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    intent: { type: Type.STRING, enum: ["recipe", "search"] },
+    products: { type: Type.ARRAY, items: { type: Type.STRING } },
+  },
+  required: ["intent", "products"],
+};
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class IntentParserService {
-  constructor() {
+  constructor(mealIntentRepository = null) {
+    this.mealIntentRepository = mealIntentRepository;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       this.client = null;
@@ -42,28 +46,35 @@ export class IntentParserService {
   }
 
   async parseIntent(query) {
-    if (!this.client) {
-      return this.#fallback(query);
-    }
+    const { priceSort } = parseSearchQuery(query);
+    const withQuery = (meal) => ({ ...meal, searchTerms: query, priceSort });
 
-    const cacheKey = query.trim().toLowerCase();
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
-      return cached.value;
+    if (!this.client) return withQuery(this.#fallback());
+
+    const key = mealCacheKey(query);
+    const cached = this.cache.get(key) || (await this.mealIntentRepository?.findByKey(key));
+    if (cached) {
+      this.#remember(key, cached);
+      return withQuery(this.#validate(cached));
     }
 
     const result = await this.#parseWithRetry(query);
     // Don't cache the fallback: a transient AI outage would otherwise pin this
-    // query to a plain search for the whole cache window.
-    if (!result) return this.#fallback(query);
+    // query to a plain search.
+    if (!result) return withQuery(this.#fallback());
 
-    this.cache.set(cacheKey, { value: result, ts: Date.now() });
-    if (this.cache.size > 500) {
-      const oldest = this.cache.keys().next().value;
-      this.cache.delete(oldest);
+    this.#remember(key, result);
+    await this.mealIntentRepository?.save(key, result).catch((err) => {
+      console.error("[IntentParser] Failed to save meal intent:", err.message);
+    });
+    return withQuery(result);
+  }
+
+  #remember(key, meal) {
+    this.cache.set(key, meal);
+    if (this.cache.size > MEMORY_CACHE_SIZE) {
+      this.cache.delete(this.cache.keys().next().value);
     }
-
-    return result;
   }
 
   async #parseWithRetry(query, maxRetries = 3) {
@@ -92,21 +103,22 @@ export class IntentParserService {
           config: {
             systemInstruction: SYSTEM_PROMPT,
             responseMimeType: "application/json",
+            responseSchema: RESPONSE_SCHEMA,
             temperature: 0,
           },
         });
 
         const text = response.text;
         const parsed = JSON.parse(text);
-        return this.#validate(parsed, query);
+        return this.#validate(parsed);
       } catch (err) {
-        if (this.#isModelUnavailableError(err)) {
+        if (isModelUnavailableError(err)) {
           console.warn(`[IntentParser] Model ${model} unavailable, trying next model.`);
           return null;
         }
 
-        if (attempt < maxRetries && this.#isTransientError(err)) {
-          const wait = this.#getRetryDelayMs(err, attempt);
+        if (attempt < maxRetries && isTransientError(err)) {
+          const wait = retryDelayMs(err, attempt, MAX_RETRY_DELAY_MS);
           console.log(
             `[IntentParser] API error, retrying in ${Math.round(wait / 1000)}s...`,
           );
@@ -120,65 +132,17 @@ export class IntentParserService {
     return null;
   }
 
-  #validate(parsed, originalQuery) {
+  #validate(parsed) {
+    const products = Array.isArray(parsed?.products)
+      ? [...new Set(parsed.products.filter((p) => typeof p === "string" && p.trim()).map((p) => p.trim()))]
+      : [];
     return {
-      searchTerms:
-        typeof parsed.searchTerms === "string" && parsed.searchTerms.trim()
-          ? parsed.searchTerms.trim()
-          : originalQuery,
-      priceSort:
-        parsed.priceSort === "asc" || parsed.priceSort === "desc"
-          ? parsed.priceSort
-          : null,
-      intent:
-        parsed.intent === "recipe" || parsed.intent === "search"
-          ? parsed.intent
-          : "search",
-      products: Array.isArray(parsed.products)
-        ? [...new Set(parsed.products.filter((p) => typeof p === "string" && p.trim()).map((p) => p.trim()))]
-        : [],
+      intent: parsed?.intent === "recipe" && products.length ? "recipe" : "search",
+      products: products.slice(0, MAX_INGREDIENTS),
     };
   }
 
-  #fallback(query) {
-    return {
-      searchTerms: query,
-      priceSort: null,
-      intent: "search",
-      products: [],
-    };
-  }
-
-  #isTransientError(err) {
-    const status = err?.status;
-    const message = String(err?.message || "").toUpperCase();
-    const code = err?.code || err?.cause?.code;
-    const networkCodes = ["ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENOTFOUND"];
-
-    return (
-      status === 429 ||
-      status === 500 ||
-      status === 502 ||
-      status === 503 ||
-      status === 504 ||
-      message.includes("RESOURCE_EXHAUSTED") ||
-      message.includes("UNAVAILABLE") ||
-      message.includes("FETCH FAILED") ||
-      networkCodes.includes(code)
-    );
-  }
-
-  #isModelUnavailableError(err) {
-    const status = err?.status;
-    const message = String(err?.message || "").toUpperCase();
-    return status === 404 || message.includes("NO LONGER AVAILABLE") || message.includes("NOT_FOUND");
-  }
-
-  #getRetryDelayMs(err, attempt) {
-    const retryInMatch = String(err?.message || "").match(/retry in ([\d.]+)s/i);
-    if (retryInMatch) return Math.ceil(Number(retryInMatch[1]) * 1000);
-    const base = Math.min(30_000, 2_000 * 2 ** attempt);
-    const jitter = Math.floor(Math.random() * 500);
-    return base + jitter;
+  #fallback() {
+    return { intent: "search", products: [] };
   }
 }

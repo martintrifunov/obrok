@@ -8,6 +8,7 @@ const mockChainRepository = {
 
 const mockMarketRepository = {
   findByName: vi.fn(),
+  findByChain: vi.fn().mockResolvedValue([]),
   create: vi.fn(),
   save: vi.fn(),
   findScrapedIds: vi.fn().mockResolvedValue([]),

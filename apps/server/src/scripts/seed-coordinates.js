@@ -2,19 +2,15 @@
  * Seed/migration script to update existing market coordinates from the static JSON file.
  * Reads market-coordinates.json and patches every matching market document in MongoDB.
  */
-import { config } from "dotenv";
-import { fileURLToPath } from "url";
+import "./load-env.js";
 import path from "path";
 import fs from "fs";
 import mongoose from "mongoose";
 import { MarketModel } from "../modules/market/market.model.js";
 import { normalizeMarketName } from "../modules/scraper/normalize-market-name.js";
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.resolve(__dirname, "../../../../.env") });
-
-const COORDS_PATH = path.resolve(__dirname, "../data/market-coordinates.json");
+const COORDS_PATH = path.resolve(import.meta.dirname, "../data/market-coordinates.json");
 
 async function main() {
   let coords;
@@ -31,7 +27,7 @@ async function main() {
     process.exit(0);
   }
 
-  const uri = process.env.MONGO_URI_LOCAL ?? process.env.DATABASE_URI;
+  const uri = scriptMongoUri();
   if (!uri) {
     console.error("[seed-coords] No MongoDB URI found in .env");
     process.exit(1);

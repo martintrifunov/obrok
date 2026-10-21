@@ -4,15 +4,8 @@ import { escapeRegExp } from "../../shared/utils/bilingualRegex.js";
 export class PublicHolidayRepository {
   async findAll({ page, limit, filter = {} }) {
     const query = this.#buildQuery(filter);
-
-    if (limit === 0) {
-      const docs = await PublicHolidayModel.find(query).sort({ date: 1 }).exec();
-      return { docs, total: null };
-    }
-
-    const skip = (page - 1) * limit;
     const [docs, total] = await Promise.all([
-      PublicHolidayModel.find(query).sort({ date: 1 }).skip(skip).limit(limit).exec(),
+      PublicHolidayModel.find(query).sort({ date: 1 }).skip((page - 1) * limit).limit(limit).exec(),
       PublicHolidayModel.countDocuments(query).exec(),
     ]);
     return { docs, total };

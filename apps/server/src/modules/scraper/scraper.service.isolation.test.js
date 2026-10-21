@@ -39,6 +39,7 @@ const makeSut = () => {
     { findByName: vi.fn().mockResolvedValue({ _id: "c1" }), create: vi.fn() },
     {
       findByName: vi.fn(async (name) => markets[name]),
+      findByChain: vi.fn(async () => Object.values(markets)),
       create: vi.fn(),
       save: vi.fn(),
       findScrapedIds: vi.fn().mockResolvedValue([]),

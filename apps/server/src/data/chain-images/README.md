@@ -7,6 +7,5 @@ Expected filenames:
 - `ramstore.png`
 - `stokomak.png`
 - `kam.png`
-- `superkitgo.png`
 
 Supported formats: `.png`, `.jpg`, `.jpeg`, `.webp`

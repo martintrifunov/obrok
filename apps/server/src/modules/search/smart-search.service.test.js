@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SmartSearchService, pickIngredientCandidates } from "./smart-search.service.js";
+import {
+  SmartSearchService,
+  pickIngredientCandidates,
+  limitPerChain,
+  usualPackSize,
+  cheapestSensiblePack,
+} from "./smart-search.service.js";
 
 const market = { _id: "m1", name: "Vero", location: [42.0, 21.4] };
 
@@ -26,7 +32,7 @@ describe("SmartSearchService", () => {
       }),
     };
     searchService = {
-      search: vi.fn(),
+      findIngredientCandidates: vi.fn(async () => null),
       searchProducts: vi.fn(async ({ q }) => ({
         data: [makeResult(q === "брашно" ? "Брашно 1кг" : "Млеко 1л", q === "брашно" ? 60 : 70)],
       })),
@@ -45,11 +51,8 @@ describe("SmartSearchService", () => {
   it("searches ingredients without the ai-search gate or a second intent parse", async () => {
     const result = await sut.search({ q: "палачинки" });
 
-    expect(searchService.search).not.toHaveBeenCalled();
+    expect(searchService.findIngredientCandidates).toHaveBeenCalledTimes(2);
     expect(searchService.searchProducts).toHaveBeenCalledTimes(2);
-    for (const [args] of searchService.searchProducts.mock.calls) {
-      expect(args.parseIntent).toBe(false);
-    }
     expect(intentParserService.parseIntent).toHaveBeenCalledTimes(1);
     expect(result.data.shoppingList).toEqual([
       { name: "брашно", found: true },
@@ -134,5 +137,126 @@ describe("SmartSearchService", () => {
 
       expect(result.data.shoppingList).toEqual([{ name: "шафран", found: false }]);
     });
+  });
+
+  describe("with vector search", () => {
+    it("prices an ingredient with the vector candidates, cheapest per market", async () => {
+      intentParserService.parseIntent.mockResolvedValue({
+        intent: "recipe",
+        products: ["тестенини"],
+        priceSort: "asc",
+      });
+      searchService.findIngredientCandidates = vi.fn(async () => [
+        makeResult("Фусили 500г", 90),
+        makeResult("Шпагети 500г", 70),
+      ]);
+
+      const result = await sut.search({ q: "паста" });
+
+      expect(searchService.searchProducts).not.toHaveBeenCalled();
+      expect(result.data.markets[0].products[0]).toMatchObject({ title: "Шпагети 500г", price: 70 });
+    });
+
+    it("lets only a store's closest matches compete on price", async () => {
+      intentParserService.parseIntent.mockResolvedValue({
+        intent: "recipe",
+        products: ["бело сирење"],
+        priceSort: "asc",
+      });
+      searchService.findIngredientCandidates = vi.fn(async () => [
+        { ...makeResult("Бело сирење кравјо 1кг", 390), score: 0.82 },
+        { ...makeResult("Посен намаз бело 200г", 119), score: 0.8 },
+      ]);
+
+      const result = await sut.search({ q: "сирење" });
+
+      expect(result.data.markets[0].products[0]).toMatchObject({ title: "Бело сирење кравјо 1кг" });
+    });
+
+    it("falls back to word matching when vector search is unavailable", async () => {
+      searchService.findIngredientCandidates = vi.fn(async () => null);
+
+      await sut.search({ q: "палачинки" });
+
+      expect(searchService.searchProducts).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
+describe("limitPerChain", () => {
+  it("keeps at most three stores per chain, in order", () => {
+    const store = (id, chain) => ({ market: { _id: id, chain: { _id: chain } } });
+    const markets = [
+      store("v1", "vero"), store("v2", "vero"), store("k1", "kam"),
+      store("v3", "vero"), store("v4", "vero"), store("k2", "kam"),
+    ];
+
+    expect(limitPerChain(markets).map((m) => m.market._id)).toEqual(["v1", "v2", "k1", "v3", "k2"]);
+  });
+});
+
+describe("pack sizes", () => {
+  const option = (title, price) => ({ product: { title }, price });
+
+  it("finds the usual pack in the most common unit", () => {
+    const usual = usualPackSize(
+      ["МЛЕКО 1Л", "МЛЕКО 1 Л", "МЛЕКО 0.5Л", "МЛЕКО ЗА КАФЕ 10х10гр.", "МЛЕКО 1L", "МЛЕКО РЕФУС КГ"].map((title) => ({
+        product: { title },
+      })),
+    );
+
+    expect(usual).toEqual({ amount: 1000, unit: "ml" });
+  });
+
+  it("has no usual pack when few titles carry a size", () => {
+    expect(usualPackSize([{ product: { title: "КОМПИР КГ" } }, { product: { title: "КОМПИР МЛАД" } }])).toBeNull();
+  });
+
+  it("ignores the few sized odd ones among unsized products", () => {
+    const titles = ["БОЈА ЗА ЈАЈЦА 6 ГР", "БОЈА ЗА ЈАЈЦА 5 ГР", "ЧОКОЛАДНИ ЈАЈЦА 120 ГР"];
+    for (let i = 0; i < 10; i++) titles.push(`ЈАЈЦА М 10/1 ФАРМА ${i}`);
+
+    expect(usualPackSize(titles.map((title) => ({ product: { title } })))).toBeNull();
+  });
+
+  it("prices loose produce per kilogram against bagged packs", () => {
+    const picked = cheapestSensiblePack(
+      [option("КОМПИР МРЕЖА 2КГ", 90), option("КОМПИР 1КГ ПАКУВАН", 50), option("КОМПИР МЛАД КГ", 40)],
+      { amount: 1000, unit: "g" },
+    );
+
+    expect(picked.product.title).toBe("КОМПИР МЛАД КГ");
+  });
+
+  it("prices milk with a carton, not cheaper coffee creamer portions", () => {
+    const picked = cheapestSensiblePack(
+      [option("МЛЕКО СВЕЖО 3.2% 1 Л", 71), option("МЛЕКО ЗА КАФЕ 10% 10х10гр.", 45), option("МЛЕКО 0.5Л", 40)],
+      { amount: 1000, unit: "ml" },
+    );
+
+    expect(picked.product.title).toBe("МЛЕКО СВЕЖО 3.2% 1 Л");
+  });
+
+  it("compares normal packs per kilogram, skipping bulk and tiny ones", () => {
+    const picked = cheapestSensiblePack(
+      [
+        option("КАШКАВАЛ ДИМЕН 300ГР", 169),
+        option("КАШКАВАЛ ОВЧИ МЛАД 350гр.", 219),
+        option("КАШКАВАЛ ТОСТ 100ГР", 77),
+        option("КАШКАВАЛ КРАВЈИ кгр МИЛКАНО", 419),
+      ],
+      { amount: 400, unit: "g" },
+    );
+
+    expect(picked.product.title).toBe("КАШКАВАЛ ДИМЕН 300ГР");
+  });
+
+  it("falls back to package price when no option has a comparable size", () => {
+    const picked = cheapestSensiblePack(
+      [option("ЈАЈЦА 10/1", 99), option("ЈАЈЦА ОД", 92)],
+      { amount: 400, unit: "g" },
+    );
+
+    expect(picked.product.title).toBe("ЈАЈЦА ОД");
   });
 });

@@ -7,15 +7,10 @@ export class PublicHolidayService {
   }
 
   async getAllHolidays({ page, limit, name, from, to }) {
-    const filter = {};
-    if (name) filter.name = name;
-    if (from) filter.from = from;
-    if (to) filter.to = to;
-
     const { docs, total } = await this.publicHolidayRepository.findAll({
       page,
       limit,
-      filter,
+      filter: { name, from, to },
     });
     return {
       data: docs,

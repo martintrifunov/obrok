@@ -17,6 +17,7 @@
     "coords:seed": "node src/scripts/seed-coordinates.js",
     "embeddings:generate": "node src/scripts/generate-embeddings.js",
     "embeddings:generate:force": "node src/scripts/generate-embeddings.js --force",
+    "eval:search": "node src/scripts/eval-search.js",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc -p jsconfig.json"
   },

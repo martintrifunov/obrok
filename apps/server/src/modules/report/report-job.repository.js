@@ -1,10 +1,8 @@
-import { ReportJobModel } from "./report-job.model.js";
+import { ReportJobModel, ReportJobStatus } from "./report-job.model.js";
+
+const ACTIVE = [ReportJobStatus.PENDING, ReportJobStatus.PROCESSING];
 
 export class ReportJobRepository {
-  async findById(id) {
-    return ReportJobModel.findById(id).exec();
-  }
-
   async findByIdAndUser(id, userId) {
     return ReportJobModel.findOne({ _id: id, requestedBy: userId }).exec();
   }
@@ -12,14 +10,14 @@ export class ReportJobRepository {
   async findActiveByUser(userId) {
     return ReportJobModel.findOne({
       requestedBy: userId,
-      status: { $in: ["PENDING", "PROCESSING"] },
+      status: { $in: ACTIVE },
     }).exec();
   }
 
   async abortInterrupted(reason) {
     return ReportJobModel.updateMany(
-      { status: { $in: ["PENDING", "PROCESSING"] } },
-      { $set: { status: "ABORTED", error: reason, finishedAt: new Date() } },
+      { status: { $in: ACTIVE } },
+      { $set: { status: ReportJobStatus.ABORTED, error: reason, finishedAt: new Date() } },
     ).exec();
   }
 
@@ -27,8 +25,6 @@ export class ReportJobRepository {
    * Atomically moves a job from one of `fromStatuses` to a new state. Returns
    * the updated job, or null if the job had already left those statuses (e.g.
    * a cancel landed first), so concurrent transitions can't overwrite each other.
-   */
-  /**
    * @param {unknown} id
    * @param {string[]} fromStatuses
    * @param {Record<string, unknown>} update
@@ -48,9 +44,5 @@ export class ReportJobRepository {
 
   async create(data) {
     return ReportJobModel.create(data);
-  }
-
-  async save(job) {
-    return job.save();
   }
 }

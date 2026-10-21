@@ -1,20 +1,7 @@
-import { config } from "dotenv";
-import { fileURLToPath } from "url";
-import path from "path";
+import "./load-env.js";
 import mongoose from "mongoose";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-config({ path: path.resolve(__dirname, "../../../../.env") });
-
-const CHAIN_NAME_MAP = {
-  vero: "Vero",
-  ramstore: "Ramstore",
-  stokomak: "Stokomak",
-  kam: "KAM",
-  superkitgo: "Super KIT-GO",
-};
+import { scriptMongoUri } from "../shared/utils/scriptMongoUri.js";
+import { SCRAPER_KEYS, createScraper } from "../modules/scraper/scraper.registry.js";
 
 const COLLECTIONS_TO_WIPE = [
   "chains",
@@ -34,10 +21,10 @@ async function wipeAll(db) {
 }
 
 async function wipeChain(db, chainKey) {
-  const chainName = CHAIN_NAME_MAP[chainKey];
+  const chainName = createScraper(chainKey)?.chainName;
   if (!chainName) {
     console.error(
-      `Unknown chain "${chainKey}". Available: ${Object.keys(CHAIN_NAME_MAP).join(", ")}`,
+      `Unknown chain "${chainKey}". Available: ${SCRAPER_KEYS.join(", ")}`,
     );
     process.exit(1);
   }
@@ -109,7 +96,7 @@ async function wipeChain(db, chainKey) {
 
 async function wipe() {
   const target = process.argv[2]?.toLowerCase();
-  const uri = process.env.MONGO_URI_LOCAL ?? process.env.DATABASE_URI;
+  const uri = scriptMongoUri();
   if (!uri) throw new Error("No Mongo URI found");
 
   console.log("Connecting to database...");

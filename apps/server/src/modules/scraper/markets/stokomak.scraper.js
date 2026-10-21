@@ -13,10 +13,6 @@ export class StokomakScraper extends BaseScraper {
     return "stokomak";
   }
 
-  get geocodeSuffix() {
-    return "Македонија";
-  }
-
   /**
    * @param {import('puppeteer').Page} page
    * @returns {Promise<import('./base.scraper.js').ScrapedMarket[]>}

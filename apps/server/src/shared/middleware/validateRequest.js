@@ -28,10 +28,6 @@ export const validateRequest = (schema, source = "body") => {
         }
       });
 
-      if (Object.keys(formattedErrors).length === 0) {
-        formattedErrors.message = "Invalid input data.";
-      }
-
       return next(new ValidationError(formattedErrors));
     }
 

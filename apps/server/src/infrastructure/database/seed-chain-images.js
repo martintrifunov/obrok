@@ -15,7 +15,6 @@ const CHAIN_IMAGE_DEFS = [
   { key: "ramstore", title: "chain-ramstore" },
   { key: "stokomak", title: "chain-stokomak" },
   { key: "kam", title: "chain-kam" },
-  { key: "superkitgo", title: "chain-superkitgo" },
 ];
 
 const SUPPORTED_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".svg"];

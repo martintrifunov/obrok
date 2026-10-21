@@ -27,11 +27,3 @@ export const updateMarketSchema = z.object({
   location: z.array(z.number()).length(2).optional(),
   chain: zodObjectId.optional(),
 });
-
-export const deleteMarketSchema = z.object({
-  id: zodObjectId,
-});
-
-export const marketParamsSchema = z.object({
-  id: zodObjectId,
-});

@@ -123,6 +123,35 @@ export class ScraperService {
     }
   }
 
+  /**
+   * A store that drops out of the chain's list is never scraped again, so its
+   * prices would stay forever. Remove its scraped prices; hand-added ones stay.
+   */
+  async #removeUnlistedStores(name, chainDoc, listedMarkets, orphanCandidates) {
+    const listed = new Set(listedMarkets.map((m) => m.name));
+    const known = await this.marketRepository.findByChain(chainDoc._id);
+    const unlisted = known.filter((m) => !listed.has(m.name));
+    if (!unlisted.length) return;
+
+    // A broken or partial store list must not wipe the chain.
+    if (listed.size < known.length * MIN_RETAINED_RATIO) {
+      console.warn(
+        `[Scraper] ⚠️  [${name}] Store list has ${listed.size} of ${known.length} known stores; keeping unlisted stores' prices.`,
+      );
+      return;
+    }
+
+    const ids = unlisted.map((m) => m._id);
+    const products = await this.marketProductRepository.findScrapedProductIdsByMarkets(ids);
+    const { deletedCount } = await this.marketProductRepository.deleteScrapedByMarkets(ids);
+    products.forEach((id) => orphanCandidates.add(id));
+    if (deletedCount) {
+      console.log(
+        `[Scraper] 🧹 [${name}] Removed ${deletedCount} prices from stores no longer listed: ${unlisted.map((m) => m.name).join(", ")}.`,
+      );
+    }
+  }
+
   async runForMarket(scraper) {
     const startTime = performance.now();
     await this.backfillLegacyPriceRows();
@@ -195,6 +224,8 @@ export class ScraperService {
           ),
         );
       }
+
+      await this.#removeUnlistedStores(scraper.chainName, chainDoc, markets, orphanCandidates);
     } finally {
       await browser.close();
       await this.#removeOrphanProducts(scraper.chainName, orphanCandidates);
@@ -265,8 +296,6 @@ export class ScraperService {
       await this.#optimizePage(page);
 
       let result;
-      let lastError;
-
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
           result = await scraper.fetchProducts(
@@ -274,10 +303,8 @@ export class ScraperService {
             pricelistUrl,
             marketDoc.lastScrapedUpdate,
           );
-          lastError = null;
           break;
         } catch (err) {
-          lastError = err;
           if (attempt === 2 || !isTransientScrapeError(err)) {
             throw err;
           }
@@ -292,10 +319,6 @@ export class ScraperService {
         }
       }
 
-      if (lastError) {
-        throw lastError;
-      }
-
       if (result.upToDate) {
         const tabDuration = ((performance.now() - tabStartTime) / 1000).toFixed(
           2,
@@ -306,20 +329,16 @@ export class ScraperService {
         return;
       }
 
-      const rawProducts = result.products;
-      if (!rawProducts || !rawProducts.length) {
+      if (!result.products?.length) {
         console.warn(`[Scraper] ⚠️  [${name}] Returned 0 products.`);
         return;
       }
 
-      const productsData = rawProducts.map(({ title, category }) => ({
-        title,
-        category,
-      }));
+      // A title listed twice (e.g. on repeated pages) keeps its last price.
+      const products = [...new Map(result.products.map((p) => [p.title, p])).values()];
+      const productIdMap = await this.#safeProductUpsert(products);
 
-      const productIdMap = await this.#safeProductUpsert(productsData);
-
-      const marketProducts = rawProducts
+      const marketProducts = products
         .filter(({ title }) => productIdMap.has(title))
         .map(({ title, price }) => ({
           market: marketDoc._id,
@@ -351,7 +370,7 @@ export class ScraperService {
         2,
       );
       console.log(
-        `[Scraper] ✅ [${name}] Scraped ${rawProducts.length} items in ${tabDuration}s`,
+        `[Scraper] ✅ [${name}] Scraped ${products.length} items in ${tabDuration}s`,
       );
     } catch (err) {
       console.error(`[ScraperService] Error in [${name}]:`, err.message);

@@ -1,52 +1,36 @@
-import mongoose from "mongoose";
-import { buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
+import { buildBilingualRegex, buildBilingualTokenRegexes } from "../../shared/utils/bilingualRegex.js";
 import { buildPaginationMeta } from "../../shared/utils/buildPaginationMeta.js";
-import { ProductModel } from "../product/product.model.js";
-import { MarketProductModel } from "../product/market-product.model.js";
+import { parseSearchQuery, buildVariantMatcher } from "./query-rules.js";
+import { buildKeywordScorer, fuseResults, sortStrongByPrice } from "./hybrid-ranker.js";
 
-const RRF_K = 60;
 const KEYWORD_LIMIT = 100;
 // Over-fetch before dropping products without prices, so they can't crowd out
 // priced ones in the top results.
 const KEYWORD_OVERFETCH = 500;
-
-const cosineSimilarity = (a, b) => {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
-};
-
-const buildFieldMatchClauses = (patterns, fields, mode = "and") => {
-  if (!patterns.length) return {};
-
-  const clauses = patterns.map((pattern) => ({
-    $or: fields.map((field) => ({
-      [field]: { $regex: pattern, $options: "i" },
-    })),
-  }));
-
-  return mode === "or" ? { $or: clauses } : { $and: clauses };
-};
+// Titles that start with the query are the best matches; fetch them apart so
+// the general cap can't crowd them out.
+const TITLE_START_LIMIT = 1500;
+// One market's catalogue is small enough to score every match.
+const MARKET_KEYWORD_LIMIT = 3000;
+const VECTOR_LIMIT = 100;
+const VECTOR_OVERFETCH = 300;
+// Meal ingredients: only products this close to the best vector match count as
+// the ingredient. Misleading word matches ("ПАСТА ЗА ЗАБИ" for "паста", sauce
+// "СО СИРЕЊЕ" for "сирење") sit 0.03 or more below it.
+const INGREDIENT_WINDOW = 0.025;
 
 export class SearchService {
   constructor(
+    searchRepository,
     embeddingService,
-    productEmbeddingRepository,
+    vectorIndex,
     featureFlagService,
-    intentParserService,
     analyticsService = null,
   ) {
+    this.searchRepository = searchRepository;
     this.embeddingService = embeddingService;
-    this.productEmbeddingRepository = productEmbeddingRepository;
+    this.vectorIndex = vectorIndex;
     this.featureFlagService = featureFlagService;
-    this.intentParserService = intentParserService;
     this.analyticsService = analyticsService;
   }
 
@@ -66,219 +50,159 @@ export class SearchService {
     return this.searchProducts({ q, marketId, page, limit });
   }
 
-  async searchProducts({ q, marketId, page = 1, limit = 10, parseIntent = true }) {
-    // Parse intent to extract clean search terms and price sorting preference
-    const intent = parseIntent && this.intentParserService?.isAvailable()
-      ? await this.intentParserService.parseIntent(q)
-      : { searchTerms: q, priceSort: null, intent: "search", products: [] };
+  async searchProducts({ q, marketId, page = 1, limit = 10 }) {
+    const { searchTerms, embeddingText, priceSort } = parseSearchQuery(q);
 
-    const searchQuery = intent.searchTerms || q;
-
-    const [vectorResults, keywordResults] = await Promise.all([
-      this.#vectorSearch(searchQuery, marketId),
-      this.#keywordSearch(searchQuery, marketId),
+    const [queryEmbedding, keywordResults] = await Promise.all([
+      this.#embedQuery(embeddingText),
+      // A price sort must see every match, not just the best-named 100.
+      this.#keywordSearch(searchTerms, marketId, priceSort ? KEYWORD_OVERFETCH : KEYWORD_LIMIT),
     ]);
+    const vectorResults = queryEmbedding
+      ? await this.#vectorSearch(queryEmbedding, marketId, keywordResults)
+      : [];
 
-    const merged = this.#rrfMerge(vectorResults, keywordResults);
+    let merged = fuseResults(vectorResults, keywordResults);
+    if (priceSort) merged = await this.#sortByPrice(merged, marketId, priceSort, searchTerms);
 
     const total = merged.length;
     const skip = (page - 1) * limit;
     const paginated = merged.slice(skip, skip + limit);
 
-    // Hydrate with full product data + market info
-    const hydrated = await this.#hydrateResults(paginated, marketId, intent.priceSort);
-
     return {
-      data: hydrated,
+      data: await this.#hydrateResults(paginated, marketId, priceSort),
       pagination: buildPaginationMeta({ total, page, limit }),
-      priceSort: intent.priceSort,
+      priceSort,
     };
   }
 
-  async #vectorSearch(query, marketId) {
-    if (!this.embeddingService.isAvailable()) return [];
+  /**
+   * Products that are the named ingredient, by vector similarity, with their
+   * prices. Null when vector search isn't available, so callers can fall back.
+   * @param {string} name
+   */
+  async findIngredientCandidates(name) {
+    const queryEmbedding = await this.#embedQuery(parseSearchQuery(name).embeddingText);
+    if (!queryEmbedding) return null;
 
-    const queryEmbedding = await this.embeddingService.generateEmbedding(
-      query,
-      "RETRIEVAL_QUERY",
-    );
+    const hits = await this.#nearestPriced(queryEmbedding, VECTOR_OVERFETCH);
+    if (!hits.length) return [];
 
-    let candidateProductIds;
-    if (marketId) {
-      // Scoped to one market — load only that market's products.
-      const marketProducts = await MarketProductModel.find({
-        market: new mongoose.Types.ObjectId(marketId),
-      })
-        .select("product")
-        .lean()
-        .exec();
-      candidateProductIds = marketProducts.map((mp) => mp.product);
-    } else {
-      // Global search — pre-filter by query tokens to avoid loading all embeddings.
-      const tokenPatterns = buildBilingualTokenRegexes(query);
-      if (!tokenPatterns.length) return [];
-      const keywordMatches = await ProductModel.find({
-        ...buildFieldMatchClauses(tokenPatterns, ["title", "category"], "or"),
-      })
-        .select("_id")
-        .limit(2000)
-        .lean()
-        .exec();
-      candidateProductIds = await this.#keepPriced(keywordMatches.map((p) => p._id));
-    }
-
-    if (candidateProductIds.length === 0) return [];
-
-    const embeddings = await this.productEmbeddingRepository.findByProducts(
-      candidateProductIds,
-    );
-
-    const scored = embeddings.map((e) => ({
-      productId: e.product.toString(),
-      score: cosineSimilarity(queryEmbedding, e.embedding),
-    }));
-
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 100);
+    const floor = hits[0].score - INGREDIENT_WINDOW;
+    return this.#hydrateResults(hits.filter((h) => h.score >= floor), null, null);
   }
 
-  async #keywordSearch(query, marketId) {
+  async #embedQuery(embeddingText) {
+    if (!this.embeddingService.isAvailable()) return null;
+    if (!this.vectorIndex.isReady()) {
+      // First search after ai-search was switched on: load in the background.
+      this.vectorIndex.load().catch((err) => console.error("[VectorIndex] Load failed:", err.message));
+      return null;
+    }
+    try {
+      return await this.embeddingService.generateEmbedding(embeddingText);
+    } catch (err) {
+      // An embedding outage shouldn't take search down: keyword results still work.
+      console.error("[Search] Query embedding failed, searching by keyword only:", err.message);
+      return null;
+    }
+  }
+
+  /** Nearest products across the catalogue that are still sold somewhere. */
+  async #nearestPriced(queryEmbedding, k) {
+    const nearest = this.vectorIndex.search(queryEmbedding, { k });
+    const priced = new Set(await this.searchRepository.keepPriced(nearest.map((h) => h.productId)));
+    return nearest.filter((h) => priced.has(h.productId));
+  }
+
+  /**
+   * Nearest products, plus a vector score for every keyword match so both
+   * signals are known for each candidate.
+   */
+  async #vectorSearch(queryEmbedding, marketId, keywordHits) {
+    const hits = marketId
+      ? this.vectorIndex.search(queryEmbedding, {
+        k: VECTOR_LIMIT,
+        productIds: await this.searchRepository.findMarketProductIds(marketId),
+      })
+      : (await this.#nearestPriced(queryEmbedding, VECTOR_OVERFETCH)).slice(0, VECTOR_LIMIT);
+
+    const seen = new Set(hits.map((h) => h.productId));
+    const unscored = keywordHits.map((h) => h.productId).filter((id) => !seen.has(id));
+    const extra = this.vectorIndex.search(queryEmbedding, { k: unscored.length, productIds: unscored });
+    return [...hits, ...extra].sort((a, b) => b.score - a.score);
+  }
+
+  async #keywordSearch(query, marketId, limit) {
     const tokenPatterns = buildBilingualTokenRegexes(query);
     if (!tokenPatterns.length) return [];
 
+    let candidates;
     if (marketId) {
-      const pipeline = [
-        { $match: { market: new mongoose.Types.ObjectId(marketId) } },
-        {
-          $lookup: {
-            from: "products",
-            localField: "product",
-            foreignField: "_id",
-            as: "product",
-          },
-        },
-        { $unwind: "$product" },
-        {
-          $match: buildFieldMatchClauses(
-            tokenPatterns,
-            ["product.title", "product.category"],
-            "and",
-          ),
-        },
-        { $limit: KEYWORD_LIMIT },
-        { $project: { "product._id": 1 } },
-      ];
-
-      const results = await MarketProductModel.aggregate(pipeline);
-      return results.map((r, i) => ({
-        productId: r.product._id.toString(),
-        score: 1 / (i + 1),
-      }));
+      candidates = await this.searchRepository.findMatchingInMarket(
+        marketId,
+        tokenPatterns,
+        MARKET_KEYWORD_LIMIT,
+      );
+    } else {
+      const phrase = buildBilingualRegex(query.trim());
+      const [titleStarts, general] = await Promise.all([
+        phrase ? this.searchRepository.findTitleStartingWith(phrase, TITLE_START_LIMIT) : [],
+        this.searchRepository.findMatching(tokenPatterns, KEYWORD_OVERFETCH),
+      ]);
+      const byId = new Map([...general, ...titleStarts].map((p) => [String(p._id), p]));
+      const priced = new Set(await this.searchRepository.keepPriced([...byId.keys()]));
+      candidates = [...byId.values()].filter((p) => priced.has(String(p._id)));
     }
 
-    const products = await ProductModel.find({
-      ...buildFieldMatchClauses(tokenPatterns, ["title", "category"], "and"),
-    })
-      .select("_id")
-      .limit(KEYWORD_OVERFETCH)
-      .lean()
-      .exec();
-    const priced = await this.#keepPriced(products.map((p) => p._id));
-
-    return priced.slice(0, KEYWORD_LIMIT).map((id, i) => ({
-      productId: id.toString(),
-      score: 1 / (i + 1),
-    }));
+    const score = buildKeywordScorer(query);
+    return candidates
+      .map((p) => ({ productId: String(p._id), score: score(p), length: (p.title || "").length }))
+      // Among equal scores, shorter titles name the product more directly.
+      .sort((a, b) => b.score - a.score || a.length - b.length)
+      .slice(0, limit)
+      .map(({ productId, score: s }) => ({ productId, score: s }));
   }
 
-  async #keepPriced(productIds) {
-    if (!productIds.length) return [];
-    const pricedIds = await MarketProductModel.distinct("product", {
-      product: { $in: productIds },
-    });
-    const priced = new Set(pricedIds.map((id) => id.toString()));
-    return productIds.filter((id) => priced.has(id.toString()));
+  async #sortByPrice(results, marketId, priceSort, searchTerms) {
+    if (!results.length) return results;
+    const ids = results.map((r) => r.productId);
+    const [prices, titles] = await Promise.all([
+      this.searchRepository.findPriceRanges(ids, marketId),
+      this.searchRepository.findTitles(ids),
+    ]);
+    /** @param {{ productId: string, score: number }} result */
+    const sortKey = (result) => {
+      const p = prices.get(result.productId);
+      if (!p) return Infinity;
+      return priceSort === "asc" ? p.min : -p.max;
+    };
+    const isVariant = buildVariantMatcher(searchTerms);
+    return sortStrongByPrice(results, sortKey, (r) => isVariant(titles.get(r.productId)));
   }
 
-  #rrfMerge(vectorResults, keywordResults) {
-    const scores = new Map();
-
-    vectorResults.forEach(({ productId }, rank) => {
-      const prev = scores.get(productId) || 0;
-      scores.set(productId, prev + 1 / (RRF_K + rank + 1));
-    });
-
-    keywordResults.forEach(({ productId }, rank) => {
-      const prev = scores.get(productId) || 0;
-      scores.set(productId, prev + 1 / (RRF_K + rank + 1));
-    });
-
-    return Array.from(scores.entries())
-      .map(([productId, score]) => ({ productId, score }))
-      .sort((a, b) => b.score - a.score);
-  }
-
-  async #hydrateResults(results, marketId, priceSort = null) {
+  async #hydrateResults(results, marketId, priceSort) {
     if (!results.length) return [];
 
-    const productIds = results.map((r) => new mongoose.Types.ObjectId(r.productId));
+    const { products, marketProducts } = await this.searchRepository.findForDisplay(
+      results.map((r) => r.productId),
+      marketId,
+    );
+    const productMap = new Map(products.map((p) => [String(p._id), p]));
 
-    const products = await ProductModel.find({ _id: { $in: productIds } })
-      .populate({ path: "image", select: "title url mimeType" })
-      .lean()
-      .exec();
-
-    const productMap = new Map(products.map((p) => [p._id.toString(), p]));
-
-    // Get market product info (price, market name, chain)
-    const mpQuery = { product: { $in: productIds } };
-    if (marketId) mpQuery.market = new mongoose.Types.ObjectId(marketId);
-
-    const marketProducts = await MarketProductModel.find(mpQuery)
-      .populate({
-        path: "market",
-        populate: {
-          path: "chain",
-          populate: { path: "image", select: "title url mimeType" },
-        },
-      })
-      .lean()
-      .exec();
-
-    // Group market products by product ID
     const mpByProduct = new Map();
     for (const mp of marketProducts) {
-      const pid = mp.product.toString();
+      const pid = String(mp.product);
       if (!mpByProduct.has(pid)) mpByProduct.set(pid, []);
-      mpByProduct.get(pid).push(mp);
+      mpByProduct.get(pid).push({ price: mp.price, market: mp.market });
     }
 
-    let hydrated = results.map(({ productId, score }) => {
-      const product = productMap.get(productId);
-      let mps = (mpByProduct.get(productId) || []).map((mp) => ({
-        price: mp.price,
-        market: mp.market,
-      }));
-
+    const dir = priceSort === "desc" ? -1 : 1;
+    return results.map(({ productId, score }) => {
+      const mps = mpByProduct.get(productId) || [];
       // Sort market offerings by price when user expressed a price preference
-      if (priceSort) {
-        const dir = priceSort === "asc" ? 1 : -1;
-        mps.sort((a, b) => (a.price - b.price) * dir);
-      }
-
-      return { product, score, marketProducts: mps };
+      if (priceSort) mps.sort((a, b) => (a.price - b.price) * dir);
+      return { product: productMap.get(productId), score, marketProducts: mps };
     });
-
-    // Re-sort products by their best available price when price intent detected
-    if (priceSort) {
-      const dir = priceSort === "asc" ? 1 : -1;
-      hydrated.sort((a, b) => {
-        const priceA = a.marketProducts.length ? a.marketProducts[0].price : Infinity;
-        const priceB = b.marketProducts.length ? b.marketProducts[0].price : Infinity;
-        return (priceA - priceB) * dir;
-      });
-    }
-
-    return hydrated;
   }
 }

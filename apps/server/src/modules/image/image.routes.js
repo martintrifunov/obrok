@@ -4,7 +4,7 @@ import verifyJWT from "../auth/middleware/verifyJWT.js";
 import verifyAdmin from "../auth/middleware/verifyAdmin.js";
 import upload from "../../config/multerConfig.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
-import { deleteImageSchema, imageParamsSchema } from "./image.schema.js";
+import { idSchema } from "../../shared/schemas/zodObjectId.js";
 import { paginationWithAllSchema } from "../../shared/schemas/paginationSchema.js";
 
 const router = Router();
@@ -18,7 +18,7 @@ router.get(
 );
 router.get(
   "/:id",
-  validateRequest(imageParamsSchema, "params"),
+  validateRequest(idSchema, "params"),
   imageController.getById,
 );
 router.post("/", verifyJWT, verifyAdmin, upload.single("image"), imageController.upload);
@@ -26,7 +26,7 @@ router.delete(
   "/",
   verifyJWT,
   verifyAdmin,
-  validateRequest(deleteImageSchema),
+  validateRequest(idSchema),
   imageController.delete,
 );
 

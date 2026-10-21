@@ -1,16 +1,12 @@
 import { MarketModel } from "./market.model.js";
 import { escapeRegExp } from "../../shared/utils/bilingualRegex.js";
 
-export class MarketRepository {
-  #populate() {
-    return {
-      chain: {
-        path: "chain",
-        populate: { path: "image", select: "title url mimeType" },
-      },
-    };
-  }
+const CHAIN = {
+  path: "chain",
+  populate: { path: "image", select: "title url mimeType" },
+};
 
+export class MarketRepository {
   #buildQuery(filter = {}) {
     const query = {};
     if (filter.name) {
@@ -23,25 +19,20 @@ export class MarketRepository {
   }
 
   async findAll({ page, limit, filter = {} }) {
-    const { chain } = this.#populate();
     const query = this.#buildQuery(filter);
+    const find = () => MarketModel.find(query).populate(CHAIN);
 
-    if (limit === 0) {
-      const docs = await MarketModel.find(query).populate(chain).exec();
-      return { docs, total: null };
-    }
+    if (limit === 0) return { docs: await find().exec(), total: null };
 
-    const skip = (page - 1) * limit;
     const [docs, total] = await Promise.all([
-      MarketModel.find(query).populate(chain).skip(skip).limit(limit).exec(),
+      find().skip((page - 1) * limit).limit(limit).exec(),
       MarketModel.countDocuments(query).exec(),
     ]);
     return { docs, total };
   }
 
   async findById(id) {
-    const { chain } = this.#populate();
-    return MarketModel.findById(id).populate(chain).exec();
+    return MarketModel.findById(id).populate(CHAIN).exec();
   }
 
   async findByName(name) {
@@ -100,7 +91,7 @@ export class MarketRepository {
     return market.save();
   }
 
-  async delete(market, options = {}) {
-    return market.deleteOne(options);
+  async delete(market) {
+    return market.deleteOne();
   }
 }

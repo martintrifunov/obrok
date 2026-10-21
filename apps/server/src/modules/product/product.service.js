@@ -9,7 +9,7 @@ export class ProductService {
     imageRepository,
     marketProductRepository,
     productEmbeddingRepository,
-    imageService = null,
+    imageService,
   ) {
     this.productRepository = productRepository;
     this.marketRepository = marketRepository;
@@ -19,44 +19,15 @@ export class ProductService {
     this.imageService = imageService;
   }
 
-  async getAllProducts({
-    page = 1,
-    limit = 10,
-    title,
-    category,
-    marketId,
-    minPrice,
-    maxPrice,
-  }) {
-    if (marketId) {
-      const filter = {};
-      if (title) filter.title = title;
-      if (category) filter.category = category;
-      if (minPrice !== undefined) filter.minPrice = minPrice;
-      if (maxPrice !== undefined) filter.maxPrice = maxPrice;
-
-      const { docs, total } = await this.marketProductRepository.findByMarket({
-        marketId,
-        page,
-        limit,
-        filter,
-      });
-
-      return {
-        data: docs,
-        pagination: buildPaginationMeta({ total, page, limit }),
-      };
-    }
-
-    const filter = {};
-    if (title) filter.title = title;
-    if (category) filter.category = category;
-
-    const { docs, total } = await this.productRepository.findAll({
-      page,
-      limit,
-      filter,
-    });
+  async getAllProducts({ page, limit, title, category, marketId, minPrice, maxPrice }) {
+    const { docs, total } = marketId
+      ? await this.marketProductRepository.findByMarket({
+          marketId,
+          page,
+          limit,
+          filter: { title, category, minPrice, maxPrice },
+        })
+      : await this.productRepository.findAll({ page, limit, filter: { title, category } });
 
     return {
       data: docs,
@@ -180,7 +151,7 @@ export class ProductService {
     await this.marketProductRepository.deleteByProduct(id);
     await this.productEmbeddingRepository.deleteByProduct(id);
     await this.productRepository.delete(product);
-    await this.imageService?.deleteIfUnused(product.image?._id ?? product.image);
+    await this.imageService.deleteIfUnused(product.image?._id ?? product.image);
   }
 
   async getCategories(marketId) {

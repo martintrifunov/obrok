@@ -3,8 +3,7 @@ import { UserModel } from "../../modules/auth/user.model.js";
 
 export const seedAdminUser = async () => {
   if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
-    console.error("ADMIN_USERNAME and ADMIN_PASSWORD must be set.");
-    process.exit(1);
+    throw new Error("ADMIN_USERNAME and ADMIN_PASSWORD must be set.");
   }
 
   const existing = await UserModel.findOne({
